@@ -200,6 +200,11 @@ function AuthPage({ onAuth, error, setError }) {
 
 function HomePage({ user, setPage, difficulty, setDifficulty, useAi, setUseAi }) {
 
+  const startScenario = (ai) => {
+    setUseAi(ai);
+    setPage('scenario');
+  };
+
   return (
     <>
       <div style={{ textAlign: 'center', marginBottom: 36 }}>
@@ -207,7 +212,7 @@ function HomePage({ user, setPage, difficulty, setDifficulty, useAi, setUseAi })
         <p style={{ color: '#888', fontSize: 14, margin: 0 }}>Analyze suspicious emails. Spot the red flags. Build your score.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
         {[
           { label: 'Score', val: user?.score || 0, color: '#8b6914' },
           { label: 'Accuracy', val: user?.total_scenarios > 0 ? `${Math.round((user.correct_answers / user.total_scenarios) * 100)}%` : '—', color: '#2e7d32' },
@@ -220,64 +225,79 @@ function HomePage({ user, setPage, difficulty, setDifficulty, useAi, setUseAi })
         ))}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 28 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 16px' }}>Start a scenario</h3>
-
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 12, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Difficulty</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {['Easy', 'Medium', 'Hard'].map(d => (
-              <button key={d} onClick={() => setDifficulty(d)} style={{
-                flex: 1, padding: '10px 0', borderRadius: 8,
-                border: difficulty === d ? `2px solid ${DIFF[d].color}` : '1.5px solid #eee',
-                background: difficulty === d ? DIFF[d].bg : '#fff',
-                color: difficulty === d ? DIFF[d].color : '#999',
-                fontSize: 13, fontWeight: 600,
-              }}>
-                {d} <span style={{ fontSize: 11, fontWeight: 400 }}>({DIFF[d].pts}pts)</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 12, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Scenario source</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setUseAi(true)} style={{
-              flex: 1, padding: '12px 8px', borderRadius: 8,
-              border: useAi ? '2px solid #1a1a1a' : '1.5px solid #eee',
-              background: useAi ? '#f5f5f5' : '#fff',
-              color: useAi ? '#1a1a1a' : '#999',
-              fontSize: 13, fontWeight: 600, textAlign: 'center',
+      {/* Difficulty selector (shared) */}
+      <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: '#999', marginBottom: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Select difficulty</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {['Easy', 'Medium', 'Hard'].map(d => (
+            <button key={d} onClick={() => setDifficulty(d)} style={{
+              flex: 1, padding: '10px 0', borderRadius: 8,
+              border: difficulty === d ? `2px solid ${DIFF[d].color}` : '1.5px solid #eee',
+              background: difficulty === d ? DIFF[d].bg : '#fff',
+              color: difficulty === d ? DIFF[d].color : '#999',
+              fontSize: 13, fontWeight: 600,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <span style={{ fontSize: 14 }}>✨</span>
-                <span>AI Generated</span>
-              </div>
-              <div style={{ fontSize: 10, fontWeight: 400, color: '#999', marginTop: 2 }}>Unique every time</div>
+              {d} <span style={{ fontSize: 11, fontWeight: 400 }}>({DIFF[d].pts}pts)</span>
             </button>
-            <button onClick={() => setUseAi(false)} style={{
-              flex: 1, padding: '12px 8px', borderRadius: 8,
-              border: !useAi ? '2px solid #1a1a1a' : '1.5px solid #eee',
-              background: !useAi ? '#f5f5f5' : '#fff',
-              color: !useAi ? '#1a1a1a' : '#999',
-              fontSize: 13, fontWeight: 600, textAlign: 'center',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <span style={{ fontSize: 14 }}>📋</span>
-                <span>Standard</span>
-              </div>
-              <div style={{ fontSize: 10, fontWeight: 400, color: '#999', marginTop: 2 }}>Pre-built scenarios</div>
-            </button>
-          </div>
+          ))}
         </div>
+      </div>
 
-        <button onClick={() => setPage('scenario')} style={{
-          width: '100%', padding: 14, borderRadius: 10, border: 'none',
-          background: '#1a1a1a', color: '#fff', fontSize: 15, fontWeight: 600,
+      {/* Two scenario source cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Pre-built Scenarios Card */}
+        <div style={{
+          background: '#fff', border: '1px solid #eee', borderRadius: 14,
+          padding: 22, display: 'flex', flexDirection: 'column',
         }}>
-          Begin scenario
-        </button>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: '#f5f0e8', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 14, fontSize: 18,
+          }}>📋</div>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: '#1a1a1a' }}>Pre-built Scenarios</h3>
+          <p style={{ fontSize: 12, color: '#888', margin: '0 0 16px', lineHeight: 1.5, flex: 1 }}>
+            Hand-crafted training scenarios based on real-world attacks. Instant and reliable.
+          </p>
+          <div style={{ fontSize: 11, color: '#999', marginBottom: 12 }}>
+            <span style={{ display: 'inline-block', padding: '2px 8px', background: '#f5f0e8', color: '#8b6914', borderRadius: 4, fontWeight: 600 }}>
+              6 per difficulty
+            </span>
+          </div>
+          <button onClick={() => startScenario(false)} style={{
+            width: '100%', padding: 12, borderRadius: 10, border: '1.5px solid #1a1a1a',
+            background: '#fff', color: '#1a1a1a', fontSize: 14, fontWeight: 600,
+          }}>
+            Start standard
+          </button>
+        </div>
+
+        {/* AI Generated Scenarios Card */}
+        <div style={{
+          background: '#1a1a1a', border: '1px solid #1a1a1a', borderRadius: 14,
+          padding: 22, display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 14, fontSize: 18,
+          }}>✨</div>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: '#fff' }}>AI-Generated Scenarios</h3>
+          <p style={{ fontSize: 12, color: '#aaa', margin: '0 0 16px', lineHeight: 1.5, flex: 1 }}>
+            Claude generates unique threats every time. Unpredictable patterns, endless variety.
+          </p>
+          <div style={{ fontSize: 11, color: '#aaa', marginBottom: 12 }}>
+            <span style={{ display: 'inline-block', padding: '2px 8px', background: 'rgba(255,255,255,0.1)', color: '#f5f0e8', borderRadius: 4, fontWeight: 600 }}>
+              Unlimited
+            </span>
+          </div>
+          <button onClick={() => startScenario(true)} style={{
+            width: '100%', padding: 12, borderRadius: 10, border: 'none',
+            background: '#fff', color: '#1a1a1a', fontSize: 14, fontWeight: 600,
+          }}>
+            Start AI mode
+          </button>
+        </div>
       </div>
     </>
   );
