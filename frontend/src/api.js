@@ -42,8 +42,8 @@ export async function getMe() {
   return request('GET', '/auth/me');
 }
 
-export async function generateScenario(difficulty) {
-  return request('POST', '/scenarios/generate', { difficulty });
+export async function generateScenario(difficulty, useAi = true) {
+  return request('POST', '/scenarios/generate', { difficulty, use_ai: useAi });
 }
 
 export async function submitAnswer(scenarioId, action, timeTaken) {

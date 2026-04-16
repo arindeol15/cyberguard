@@ -36,6 +36,13 @@ class UserResponse(BaseModel):
 # ── Scenario ──
 class GenerateRequest(BaseModel):
     difficulty: str = "Medium"
+    use_ai: bool = True
+
+
+class ActionOption(BaseModel):
+    id: str
+    label: str
+    desc: str
 
 
 class ScenarioResponse(BaseModel):
@@ -46,6 +53,7 @@ class ScenarioResponse(BaseModel):
     sender_name: str
     subject: str
     body: str
+    options: list[ActionOption] = []
 
     class Config:
         from_attributes = True

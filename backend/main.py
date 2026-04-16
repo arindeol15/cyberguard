@@ -97,40 +97,84 @@ async def generate_scenario(
     used_types = [s.type for s in used_scenarios]
     used_subjects = [s.subject for s in used_scenarios]
 
-    # Try AI generation first
-    ai_result = await generate_ai_scenario(difficulty, used_types, used_subjects)
+    # Default options for static scenarios (backward compatibility)
+    DEFAULT_OPTIONS = [
+        {"id": "report", "label": "Report threat", "desc": "Flag as malicious"},
+        {"id": "verify", "label": "Verify sender", "desc": "Confirm legitimacy"},
+        {"id": "ignore", "label": "Delete it", "desc": "Remove from inbox"},
+        {"id": "comply", "label": "Follow instructions", "desc": "Do what it says"},
+    ]
 
-    if ai_result:
-        scenario = Scenario(
-            type=ai_result.get("type", "Phishing"),
-            difficulty=difficulty,
-            sender_email=ai_result.get("from", "unknown@fake.com"),
-            sender_name=ai_result.get("sender", "Unknown"),
-            subject=ai_result.get("subject", "No subject"),
-            body=ai_result.get("body", ""),
-            correct_action=ai_result.get("answer", "report"),
-            red_flags=json.dumps(ai_result.get("flags", [])),
-            is_ai_generated=True,
-        )
-        db.add(scenario)
-        db.commit()
-        db.refresh(scenario)
-        return ScenarioResponse.model_validate(scenario)
+    # Try AI generation only if user requested it
+    if req.use_ai:
+        ai_result = await generate_ai_scenario(difficulty, used_types, used_subjects)
 
-    # Fallback: pick a static scenario the user hasn't seen
+        if ai_result:
+            options = ai_result.get("options", DEFAULT_OPTIONS)
+            correct_id = ai_result.get("correct_id", "report")
+
+            scenario = Scenario(
+                type=ai_result.get("type", "Phishing"),
+                difficulty=difficulty,
+                sender_email=ai_result.get("from", "unknown@fake.com"),
+                sender_name=ai_result.get("sender", "Unknown"),
+                subject=ai_result.get("subject", "No subject"),
+                body=ai_result.get("body", ""),
+                correct_action=correct_id,
+                red_flags=json.dumps(ai_result.get("flags", [])),
+                options=json.dumps(options),
+                is_ai_generated=True,
+            )
+            db.add(scenario)
+            db.commit()
+            db.refresh(scenario)
+
+            # Build response with parsed options
+            response_data = {
+                "id": scenario.id,
+                "type": scenario.type,
+                "difficulty": scenario.difficulty,
+                "sender_email": scenario.sender_email,
+                "sender_name": scenario.sender_name,
+                "subject": scenario.subject,
+                "body": scenario.body,
+                "options": options,
+            }
+            return response_data
+
+    # Static scenario: pick one the user hasn't seen (only non-AI ones)
     unseen = (
         db.query(Scenario)
         .filter(Scenario.difficulty == difficulty)
+        .filter(Scenario.is_ai_generated == False)
         .filter(~Scenario.id.in_(used_scenario_ids) if used_scenario_ids else True)
         .all()
     )
     if not unseen:
-        unseen = db.query(Scenario).filter(Scenario.difficulty == difficulty).all()
+        unseen = db.query(Scenario).filter(
+            Scenario.difficulty == difficulty,
+            Scenario.is_ai_generated == False
+        ).all()
+    if not unseen:
+        unseen = db.query(Scenario).filter(Scenario.is_ai_generated == False).all()
     if not unseen:
         unseen = db.query(Scenario).all()
 
     scenario = random.choice(unseen)
-    return ScenarioResponse.model_validate(scenario)
+
+    # Static scenarios use default options
+    scenario_options = json.loads(scenario.options) if scenario.options else DEFAULT_OPTIONS
+
+    return {
+        "id": scenario.id,
+        "type": scenario.type,
+        "difficulty": scenario.difficulty,
+        "sender_email": scenario.sender_email,
+        "sender_name": scenario.sender_name,
+        "subject": scenario.subject,
+        "body": scenario.body,
+        "options": scenario_options,
+    }
 
 
 @app.post("/api/scenarios/submit", response_model=SubmitResponse)

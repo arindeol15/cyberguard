@@ -41,6 +41,7 @@ class Scenario(Base):
     body = Column(String, nullable=False)
     correct_action = Column(String, nullable=False)
     red_flags = Column(String, nullable=False)  # stored as JSON string
+    options = Column(String, nullable=True)  # stored as JSON string (for AI scenarios with custom options)
     is_ai_generated = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -65,6 +66,18 @@ class Response(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Simple migration: add options column if it doesn't exist (for existing databases)
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    if "scenarios" in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("scenarios")]
+        if "options" not in columns:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE scenarios ADD COLUMN options TEXT"))
+                print("Added 'options' column to scenarios table")
+            except Exception as e:
+                print(f"Migration note: {e}")
 
 
 def get_db():

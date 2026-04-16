@@ -19,6 +19,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [error, setError] = useState('');
   const [difficulty, setDifficulty] = useState('Medium');
+  const [useAi, setUseAi] = useState(true);
 
   useEffect(() => {
     if (api.isLoggedIn()) {
@@ -55,8 +56,8 @@ export default function App() {
     <div style={{ minHeight: '100vh', background: '#f7f7f5' }}>
       <NavBar user={user} page={page} setPage={setPage} onLogout={handleLogout} />
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 20px' }}>
-        {page === 'home' && <HomePage user={user} setPage={setPage} difficulty={difficulty} setDifficulty={setDifficulty} />}
-        {page === 'scenario' && <ScenarioPage user={user} setPage={setPage} refreshUser={refreshUser} difficulty={difficulty} />}
+        {page === 'home' && <HomePage user={user} setPage={setPage} difficulty={difficulty} setDifficulty={setDifficulty} useAi={useAi} setUseAi={setUseAi} />}
+        {page === 'scenario' && <ScenarioPage user={user} setPage={setPage} refreshUser={refreshUser} difficulty={difficulty} useAi={useAi} />}
         {page === 'leaderboard' && <LeaderboardPage user={user} />}
         {page === 'stats' && <StatsPage />}
       </div>
@@ -197,7 +198,7 @@ function AuthPage({ onAuth, error, setError }) {
 
 // ── HOME ──
 
-function HomePage({ user, setPage, difficulty, setDifficulty }) {
+function HomePage({ user, setPage, difficulty, setDifficulty, useAi, setUseAi }) {
 
   return (
     <>
@@ -239,6 +240,38 @@ function HomePage({ user, setPage, difficulty, setDifficulty }) {
           </div>
         </div>
 
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Scenario source</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setUseAi(true)} style={{
+              flex: 1, padding: '12px 8px', borderRadius: 8,
+              border: useAi ? '2px solid #1a1a1a' : '1.5px solid #eee',
+              background: useAi ? '#f5f5f5' : '#fff',
+              color: useAi ? '#1a1a1a' : '#999',
+              fontSize: 13, fontWeight: 600, textAlign: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>✨</span>
+                <span>AI Generated</span>
+              </div>
+              <div style={{ fontSize: 10, fontWeight: 400, color: '#999', marginTop: 2 }}>Unique every time</div>
+            </button>
+            <button onClick={() => setUseAi(false)} style={{
+              flex: 1, padding: '12px 8px', borderRadius: 8,
+              border: !useAi ? '2px solid #1a1a1a' : '1.5px solid #eee',
+              background: !useAi ? '#f5f5f5' : '#fff',
+              color: !useAi ? '#1a1a1a' : '#999',
+              fontSize: 13, fontWeight: 600, textAlign: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>📋</span>
+                <span>Standard</span>
+              </div>
+              <div style={{ fontSize: 10, fontWeight: 400, color: '#999', marginTop: 2 }}>Pre-built scenarios</div>
+            </button>
+          </div>
+        </div>
+
         <button onClick={() => setPage('scenario')} style={{
           width: '100%', padding: 14, borderRadius: 10, border: 'none',
           background: '#1a1a1a', color: '#fff', fontSize: 15, fontWeight: 600,
@@ -253,7 +286,7 @@ function HomePage({ user, setPage, difficulty, setDifficulty }) {
 
 // ── SCENARIO ──
 
-function ScenarioPage({ user, setPage, refreshUser, difficulty }) {
+function ScenarioPage({ user, setPage, refreshUser, difficulty, useAi }) {
   const [scenario, setScenario] = useState(null);
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
@@ -275,11 +308,13 @@ function ScenarioPage({ user, setPage, refreshUser, difficulty }) {
     setLoading(true);
     setSelected(null);
     setResult(null);
-    setShuffledActions(shuffleArray(ACTIONS));
     startTime.current = Date.now();
     try {
-      const s = await api.generateScenario(difficulty);
+      const s = await api.generateScenario(difficulty, useAi);
       setScenario(s);
+      // Shuffle the options that came from the backend
+      const opts = s.options && s.options.length > 0 ? s.options : ACTIONS;
+      setShuffledActions(shuffleArray(opts));
     } catch (e) {
       console.error('Failed to load scenario:', e);
     }
@@ -305,8 +340,12 @@ function ScenarioPage({ user, setPage, refreshUser, difficulty }) {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 0', color: '#888' }}>
-        <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 8 }}>Generating scenario...</div>
-        <p style={{ fontSize: 13 }}>AI is crafting a new threat for you</p>
+        <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 8 }}>
+          {useAi ? 'Generating AI scenario...' : 'Loading scenario...'}
+        </div>
+        <p style={{ fontSize: 13 }}>
+          {useAi ? 'AI is crafting a unique threat for you' : 'Preparing a standard scenario'}
+        </p>
       </div>
     );
   }
@@ -342,7 +381,7 @@ function ScenarioPage({ user, setPage, refreshUser, difficulty }) {
             {result.correct ? 'Correct!' : 'Not quite'}
           </h2>
           <p style={{ color: '#888', fontSize: 14, margin: '0 0 4px' }}>
-            The right action was: <strong>{ACTIONS.find(a => a.id === result.correct_action)?.label}</strong>
+            The right action was: <strong>{(scenario?.options?.find(a => a.id === result.correct_action) || ACTIONS.find(a => a.id === result.correct_action))?.label || result.correct_action}</strong>
           </p>
           {result.correct && (
             <span style={{ fontSize: 13, color: '#8b6914', fontWeight: 600 }}>+{result.points_earned} points</span>
@@ -417,21 +456,24 @@ function ScenarioPage({ user, setPage, refreshUser, difficulty }) {
           What would you do?
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {shuffledActions.map(a => (
-            <button key={a.id} onClick={() => setSelected(a.id)} style={{
-              padding: '14px 16px', borderRadius: 10, textAlign: 'left',
-              border: selected === a.id ? '2px solid #1a1a1a' : '1.5px solid #eee',
-              background: selected === a.id ? '#f5f5f5' : '#fff',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16, width: 24, textAlign: 'center', color: '#888' }}>{a.icon}</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
-                  <div style={{ fontSize: 11, color: '#999' }}>{a.desc}</div>
+          {shuffledActions.map((a, idx) => {
+            const icons = ['◆', '◉', '◈', '◇'];
+            return (
+              <button key={a.id} onClick={() => setSelected(a.id)} style={{
+                padding: '14px 16px', borderRadius: 10, textAlign: 'left',
+                border: selected === a.id ? '2px solid #1a1a1a' : '1.5px solid #eee',
+                background: selected === a.id ? '#f5f5f5' : '#fff',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <span style={{ fontSize: 14, width: 20, textAlign: 'center', color: '#888', marginTop: 2 }}>{icons[idx % 4]}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
+                    <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>{a.desc}</div>
+                  </div>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
 
