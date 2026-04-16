@@ -259,12 +259,23 @@ function ScenarioPage({ user, setPage, refreshUser, difficulty }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [shuffledActions, setShuffledActions] = useState(ACTIONS);
   const startTime = useRef(Date.now());
+
+  const shuffleArray = (arr) => {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
 
   const loadScenario = async () => {
     setLoading(true);
     setSelected(null);
     setResult(null);
+    setShuffledActions(shuffleArray(ACTIONS));
     startTime.current = Date.now();
     try {
       const s = await api.generateScenario(difficulty);
@@ -406,7 +417,7 @@ function ScenarioPage({ user, setPage, refreshUser, difficulty }) {
           What would you do?
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {ACTIONS.map(a => (
+          {shuffledActions.map(a => (
             <button key={a.id} onClick={() => setSelected(a.id)} style={{
               padding: '14px 16px', borderRadius: 10, textAlign: 'left',
               border: selected === a.id ? '2px solid #1a1a1a' : '1.5px solid #eee',

@@ -90,14 +90,15 @@ async def generate_scenario(
 ):
     difficulty = req.difficulty if req.difficulty in POINTS else "Medium"
 
-    # Get previously used types for this user
+    # Get previously used types AND subjects for this user
     user_responses = db.query(Response).filter(Response.user_id == user.id).all()
     used_scenario_ids = [r.scenario_id for r in user_responses]
     used_scenarios = db.query(Scenario).filter(Scenario.id.in_(used_scenario_ids)).all() if used_scenario_ids else []
     used_types = [s.type for s in used_scenarios]
+    used_subjects = [s.subject for s in used_scenarios]
 
     # Try AI generation first
-    ai_result = await generate_ai_scenario(difficulty, used_types)
+    ai_result = await generate_ai_scenario(difficulty, used_types, used_subjects)
 
     if ai_result:
         scenario = Scenario(
