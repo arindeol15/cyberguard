@@ -1,71 +1,25 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const API = `${API_BASE}/api`;
 
-function getToken() {
-  return localStorage.getItem('cyberguard_token');
-}
-
-function authHeaders() {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+function getToken() { return localStorage.getItem('cyberguard_token'); }
+function authHeaders() { const t = getToken(); return t ? { Authorization: `Bearer ${t}` } : {}; }
 
 async function request(method, path, body = null) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-  };
+  const opts = { method, headers: { 'Content-Type': 'application/json', ...authHeaders() } };
   if (body) opts.body = JSON.stringify(body);
-
   const res = await fetch(`${API}${path}`, opts);
   const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.detail || 'Request failed');
-  }
+  if (!res.ok) throw new Error(data.detail || 'Request failed');
   return data;
 }
 
-export async function register(username, password) {
-  const data = await request('POST', '/auth/register', { username, password });
-  localStorage.setItem('cyberguard_token', data.access_token);
-  return data;
-}
-
-export async function login(username, password) {
-  const data = await request('POST', '/auth/login', { username, password });
-  localStorage.setItem('cyberguard_token', data.access_token);
-  return data;
-}
-
-export async function getMe() {
-  return request('GET', '/auth/me');
-}
-
-export async function generateScenario(difficulty, useAi = true) {
-  return request('POST', '/scenarios/generate', { difficulty, use_ai: useAi });
-}
-
-export async function submitAnswer(scenarioId, action, timeTaken) {
-  return request('POST', '/scenarios/submit', {
-    scenario_id: scenarioId,
-    action,
-    time_taken: timeTaken,
-  });
-}
-
-export async function getLeaderboard() {
-  return request('GET', '/leaderboard');
-}
-
-export async function getStats() {
-  return request('GET', '/stats');
-}
-
-export function logout() {
-  localStorage.removeItem('cyberguard_token');
-}
-
-export function isLoggedIn() {
-  return !!getToken();
-}
+export const register = (u, p) => request('POST', '/auth/register', { username: u, password: p }).then(d => { localStorage.setItem('cyberguard_token', d.access_token); return d; });
+export const login = (u, p) => request('POST', '/auth/login', { username: u, password: p }).then(d => { localStorage.setItem('cyberguard_token', d.access_token); return d; });
+export const getMe = () => request('GET', '/auth/me');
+export const generateScenario = (difficulty, useAi, category) => request('POST', '/scenarios/generate', { difficulty, use_ai: useAi, category });
+export const submitAnswer = (scenarioId, action, timeTaken) => request('POST', '/scenarios/submit', { scenario_id: scenarioId, action, time_taken: timeTaken });
+export const getLeaderboard = () => request('GET', '/leaderboard');
+export const getStats = () => request('GET', '/stats');
+export const getThreats = () => request('GET', '/threats');
+export const logout = () => localStorage.removeItem('cyberguard_token');
+export const isLoggedIn = () => !!getToken();

@@ -12,7 +12,7 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "default-secret-key")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -46,7 +46,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-
     user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception

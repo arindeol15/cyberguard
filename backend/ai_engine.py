@@ -5,164 +5,97 @@ import random
 from dotenv import load_dotenv
 
 load_dotenv()
-
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-ATTACK_TYPES = [
-    "phishing", "spear-phishing", "BEC (Business Email Compromise)",
-    "pretexting", "baiting", "whaling", "smishing",
-    "clone-phishing", "angler-phishing", "pharming",
-    "vishing-transcript", "watering-hole", "quid-pro-quo",
-    "tech-support-scam", "romance-scam",
-    "invoice-fraud", "gift-card-scam", "fake-charity",
-    "CEO-fraud", "supply-chain-attack", "credential-harvesting"
+PROMPTS = {
+    "email": """Generate a {difficulty}-difficulty phishing EMAIL scenario #{seed}.
+Industry: {industry}. Theme: {theme}.
+
+Respond ONLY with JSON (no markdown):
+{{"type":"attack_type","from":"fake@domain.com","sender":"Display Name","subject":"Subject","body":"Full email 150+ words","options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+
+The correct answer must be: {archetype}
+Options must be UNIQUE to this email. Never use generic labels. correct_id must be "{correct_pos}".""",
+
+    "website": """Generate a {difficulty}-difficulty FAKE WEBSITE detection scenario #{seed}.
+Industry: {industry}.
+
+Create a scenario where the user must identify a FAKE/cloned website. Include the fake URL and what the real URL should be.
+
+Respond ONLY with JSON (no markdown):
+{{"type":"fake_website","subject":"Website name being spoofed","body":"Description of what the user sees on this fake website (150+ words, describe the page layout, what it asks for, visual details)","extra_data":{{"fake_url":"https://amaz0n-login.com/signin","real_url":"https://amazon.com/signin","ssl_valid":false,"domain_age":"2 days","visual_differences":["Logo is slightly blurry","Footer links are broken","Address bar shows http not https","Copyright year is wrong"]}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+
+Easy = obvious fake URL (g00gle.com), broken images, spelling errors
+Medium = convincing look but detectable issues in URL, SSL, small visual differences
+Hard = nearly identical clone, only subtle URL difference and minor visual clues""",
+
+    "qr": """Generate a {difficulty}-difficulty QR CODE attack scenario #{seed}.
+Location context: {location}.
+
+Create a scenario where user encounters a QR code in a real-world situation and must decide if it's safe.
+
+Respond ONLY with JSON (no markdown):
+{{"type":"qr_attack","subject":"Where/how user found the QR code","body":"Full description of the situation (150+ words). Where is the QR code? What does it claim to do? What does the user see after scanning?","extra_data":{{"location":"{location}","claimed_purpose":"Free WiFi login / Menu / Payment / Discount coupon","actual_destination":"https://malicious-site.com/steal-data","qr_placement":"Sticker placed over original QR on restaurant menu","redirect_chain":["https://short.link/x7k","https://malicious-site.com/steal-data"]}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+
+Easy = obviously suspicious QR with clear warning signs
+Medium = plausible scenario but detectable if you look closely
+Hard = very convincing placement, hard to distinguish from legitimate""",
+
+    "vishing": """Generate a {difficulty}-difficulty VISHING (voice phishing) phone call scenario #{seed}.
+Caller pretends to be from: {industry}.
+
+Create a realistic phone call TRANSCRIPT between a scammer and a potential victim.
+
+Respond ONLY with JSON (no markdown):
+{{"type":"vishing","subject":"Who the caller claims to be","body":"Full phone call transcript (200+ words). Format as:\\nCaller: ...\\nYou: ...\\nCaller: ...\\netc. The caller uses social engineering tactics.","extra_data":{{"caller_id":"Displayed caller ID (may be spoofed)","claimed_organization":"Bank / IRS / Tech Support / etc","tactics_used":["urgency","authority","fear","isolation"],"info_requested":["SSN","bank account","password","remote access"]}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+
+Easy = obvious pressure tactics, broken English, asks for password directly
+Medium = professional tone but asks for too much info, subtle pressure
+Hard = very convincing, uses real department names, knows some of your info""",
+
+    "usb": """Generate a {difficulty}-difficulty USB DROP attack scenario #{seed}.
+Location: {location}.
+
+Create a scenario where the user finds a USB drive and must decide what to do.
+
+Respond ONLY with JSON (no markdown):
+{{"type":"usb_drop","subject":"USB label/appearance description","body":"Full scenario description (150+ words). Where was the USB found? What does it look like? What label is on it? If plugged in, what files appear? What happens next?","extra_data":{{"found_location":"{location}","usb_label":"Label written on the USB","usb_appearance":"Physical description of the USB drive","files_if_opened":["Salaries_Q4_2024.xlsx","README.txt","Photos/"],"hidden_payload":"Autorun malware that installs keylogger","social_engineering":"Label designed to trigger curiosity"}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+
+Easy = suspicious USB in obvious location with too-good-to-be-true label
+Medium = found in office area, looks like a colleague lost it
+Hard = branded company USB with legitimate-looking label found in lobby""",
+}
+
+INDUSTRIES = ["banking","healthcare","e-commerce","tech company","government","university","cloud service","social media","shipping","cryptocurrency","streaming","airline","insurance","telecom","real estate"]
+THEMES = ["password reset","package delivery","invoice payment","account verification","job offer","tax refund","security alert","subscription renewal","document signing","legal notice","prize winner","2FA code"]
+LOCATIONS = ["office parking lot","company lobby","coffee shop table","conference room","gym locker room","hotel business center","airport lounge","library desk","coworking space","restaurant table"]
+ARCHETYPES = [
+    "Verify through a DIFFERENT trusted channel (phone, official website, in person)",
+    "Report to IT/security team immediately",
+    "Delete/ignore without interacting",
+    "Manually navigate to official website yourself",
+    "Check with manager or authorized person first",
+    "Refuse, document, and report the incident",
 ]
 
-INDUSTRIES = [
-    "banking", "healthcare", "e-commerce", "tech company",
-    "government agency", "university", "cloud service",
-    "social media", "shipping/logistics", "cryptocurrency",
-    "streaming service", "airline", "insurance", "real estate",
-    "telecom provider", "food delivery", "ride-sharing",
-    "online gaming", "fitness app", "news subscription"
-]
 
-THEMES = [
-    "password reset", "package delivery", "invoice payment",
-    "account verification", "job offer", "tax refund",
-    "file share", "meeting invitation", "security alert",
-    "subscription renewal", "reward claim", "document signing",
-    "voicemail notification", "legal notice", "survey request",
-    "prize winner", "shared photo album", "calendar sync",
-    "overdue bill", "shipping confirmation", "password breach alert",
-    "2FA code request", "cryptocurrency opportunity", "charity donation"
-]
-
-# Different "correct action" archetypes - rotate these so the answer isn't always the same
-CORRECT_ACTION_ARCHETYPES = [
-    {
-        "type": "verify_via_different_channel",
-        "description": "The correct answer is to verify through a DIFFERENT trusted channel (phone call, visit official website directly, ask colleague in person)",
-        "example": "Call the sender on their known office number to confirm the request"
-    },
-    {
-        "type": "report_to_it_security",
-        "description": "The correct answer is to REPORT this to IT/security team",
-        "example": "Forward to security@company.com for analysis"
-    },
-    {
-        "type": "delete_without_interacting",
-        "description": "The correct answer is to DELETE/IGNORE without clicking anything (for obvious low-threat spam)",
-        "example": "Delete the email and block the sender"
-    },
-    {
-        "type": "manually_navigate",
-        "description": "The correct answer is to MANUALLY go to the official website yourself (not click any link)",
-        "example": "Open the company's official website directly and log in from there"
-    },
-    {
-        "type": "check_with_authority",
-        "description": "The correct answer is to CHECK with a manager or authorized person first",
-        "example": "Confirm with your manager before taking any action"
-    },
-    {
-        "type": "refuse_and_document",
-        "description": "The correct answer is to REFUSE and document the incident",
-        "example": "Do not reply, screenshot the email, and report it to IT"
-    },
-]
-
-
-async def generate_ai_scenario(difficulty: str, used_types: list[str] = [], used_subjects: list[str] = []) -> dict | None:
-    """Call Claude API to generate a new attack scenario with unique action options and varied correct answers."""
-
+async def generate_ai_scenario(category: str, difficulty: str, used_types: list[str] = [], used_subjects: list[str] = []) -> dict | None:
     if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your-anthropic-api-key-here":
         return None
 
-    chosen_industry = random.choice(INDUSTRIES)
-    chosen_theme = random.choice(THEMES)
-    available_types = [t for t in ATTACK_TYPES if t not in used_types[-5:]]
-    if not available_types:
-        available_types = ATTACK_TYPES
-
-    # Randomly pick an archetype for what the CORRECT action should look like
-    archetype = random.choice(CORRECT_ACTION_ARCHETYPES)
-
-    # Randomly pick where the correct option should appear (opt1, opt2, opt3, or opt4)
-    correct_position = random.choice(["opt1", "opt2", "opt3", "opt4"])
-
     seed = random.randint(10000, 99999)
+    industry = random.choice(INDUSTRIES)
+    theme = random.choice(THEMES)
+    location = random.choice(LOCATIONS)
+    correct_pos = random.choice(["opt1", "opt2", "opt3", "opt4"])
+    archetype = random.choice(ARCHETYPES)
 
-    prompt = f"""You are creating cybersecurity training scenario #{seed}. Be extremely creative and unique.
-
-Generate a {difficulty}-difficulty social engineering attack email with 4 custom action options.
-
-MANDATORY CHOICES (must use):
-- Industry: {chosen_industry}
-- Theme: {chosen_theme}
-- Attack type (pick one): {', '.join(available_types[:8])}
-
-DO NOT REPEAT these patterns recently used:
-- Recent types: {', '.join(used_types[-5:]) if used_types else 'none'}
-- Recent subjects: {' | '.join(used_subjects[-5:]) if used_subjects else 'none'}
-
-CORRECT ANSWER REQUIREMENTS (CRITICAL):
-- The correct action for this scenario must be: {archetype['description']}
-- Example of this type of answer: "{archetype['example']}"
-- Do NOT make the correct answer a generic "report as phishing" — the user needs to learn VARIED defensive responses
-- The correct option MUST be placed at position: {correct_position}
-
-Respond with ONLY a JSON object (no markdown, no backticks):
-{{
-  "type": "specific attack type name",
-  "from": "realistic-spoofed-email@fake-domain.com",
-  "sender": "Display Name of sender",
-  "subject": "Unique specific subject line",
-  "body": "Full realistic email body (150+ words, with specific names, amounts, dates, reference numbers — make it feel real)",
-  "options": [
-    {{"id": "opt1", "label": "Short action label (3-6 words)", "desc": "What this action does (under 10 words)"}},
-    {{"id": "opt2", "label": "Short action label (3-6 words)", "desc": "What this action does (under 10 words)"}},
-    {{"id": "opt3", "label": "Short action label (3-6 words)", "desc": "What this action does (under 10 words)"}},
-    {{"id": "opt4", "label": "Short action label (3-6 words)", "desc": "What this action does (under 10 words)"}}
-  ],
-  "correct_id": "{correct_position}",
-  "flags": ["specific red flag 1 (specific to THIS email)", "specific red flag 2", "specific red flag 3", "specific red flag 4"]
-}}
-
-DIFFICULTY RULES:
-- Easy: Obvious typos, clearly fake domains like g00gle.com, generic "Dear Customer" greetings, absurd urgency
-- Medium: Looks convincing with 3-4 detectable issues — slightly off domain, minor grammar, missing context, soft pressure
-- Hard: Professional language, realistic scenarios, look-alike domains (company-portal.com vs company.com), only 1-2 subtle red flags
-
-OPTIONS REQUIREMENTS (VERY IMPORTANT):
-- All 4 options must be DIFFERENT from each other
-- All 4 options must be SPECIFIC to this email's content — NOT generic labels like "Report threat" or "Verify sender"
-- The correct option (at position {correct_position}) must match the archetype described above
-- The 3 WRONG options should be plausible but insecure actions that an untrained person might take
-- Wrong options can include things like: clicking links, replying with info, forwarding to others, calling the number in the email, trusting the request
-- Make options feel like real decisions someone would face with THIS specific email
-
-EXAMPLES of GOOD varied option sets:
-
-For a fake bank password reset email:
-- "Click the link and update password" (wrong - clicks untrusted link)
-- "Reply asking for verification" (wrong - engages with attacker)
-- "Open bank's app directly and check for alerts" (CORRECT - manual navigation)
-- "Delete and not worry about it" (wrong - might be real breach)
-
-For a CEO fraud wire transfer email:
-- "Process the wire transfer immediately" (wrong - comply)
-- "Reply confirming receipt" (wrong - engages)
-- "Forward to finance team" (wrong - spreads attack)
-- "Call the CEO on known number to confirm" (CORRECT - verify differently)
-
-For a fake IT password reset:
-- "Enter old and new password on the link" (wrong - gives credentials)
-- "Reply asking what happened" (wrong - engages)
-- "Call IT helpdesk on posted number to confirm" (CORRECT - verify)
-- "Share the email with teammates" (wrong - spreads)
-
-Remember: VARIETY is the goal. Every scenario should feel fresh. No two scenarios should have the same correct answer pattern."""
+    prompt_template = PROMPTS.get(category, PROMPTS["email"])
+    prompt = prompt_template.format(
+        difficulty=difficulty, seed=seed, industry=industry,
+        theme=theme, location=location, correct_pos=correct_pos,
+        archetype=archetype,
+    )
 
     try:
         async with httpx.AsyncClient(timeout=45.0) as client:
@@ -181,15 +114,10 @@ Remember: VARIETY is the goal. Every scenario should feel fresh. No two scenario
                 },
             )
             data = response.json()
-            text = "".join(
-                block["text"] for block in data.get("content", []) if block.get("type") == "text"
-            )
+            text = "".join(b["text"] for b in data.get("content", []) if b.get("type") == "text")
             clean = text.replace("```json", "").replace("```", "").strip()
             result = json.loads(clean)
-
-            # Force the correct_id to match what we asked for (in case AI ignored it)
-            result["correct_id"] = correct_position
-
+            result["correct_id"] = correct_pos
             return result
     except Exception as e:
         print(f"AI generation failed: {e}")

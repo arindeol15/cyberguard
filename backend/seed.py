@@ -1,406 +1,38 @@
 import json
 from database import SessionLocal, Scenario
 
+SEED = [
+    # ══════ EMAIL SCENARIOS ══════
+    {"category":"email","type":"Phishing","difficulty":"Easy","sender_email":"support@amaz0n-security.com","sender_name":"Amazon Security","subject":"Your account has been locked!","body":"Dear Customer,\n\nWe detected suspicious activity on your Amazon account. Your account has been temporarily locked.\n\nPlease click the link below to verify your identity within 24 hours or your account will be permanently deleted.\n\nVerify Now: https://amaz0n-security.com/verify-account\n\nThank you,\nAmazon Customer Protection Team","correct_action":"opt3","options":json.dumps([{"id":"opt1","label":"Click verify link now","desc":"Restore account immediately"},{"id":"opt2","label":"Reply with my details","desc":"Confirm identity via email"},{"id":"opt3","label":"Open Amazon app directly","desc":"Check for real alerts there"},{"id":"opt4","label":"Forward link to friends","desc":"Warn them to check"}]),"red_flags":json.dumps(["Fake domain — 'amaz0n' uses zero instead of 'o'","24-hour urgency deadline","Generic 'Dear Customer' greeting","Suspicious non-Amazon link"])},
+    {"category":"email","type":"BEC","difficulty":"Medium","sender_email":"ceo.james@company-mail.net","sender_name":"James Wright (CEO)","subject":"Urgent wire transfer needed","body":"Hi,\n\nI need you to process a wire transfer of $32,000 to a new supplier immediately. I'm traveling and can't do it myself.\n\nWire to:\nBank: Pacific Trust\nAccount: 7739201854\n\nPlease handle this right away and don't mention it to others — the deal is confidential.\n\nThanks,\nJames\n\nSent from my iPhone","correct_action":"opt4","options":json.dumps([{"id":"opt1","label":"Process transfer immediately","desc":"Help the CEO with urgent deal"},{"id":"opt2","label":"Reply confirming receipt","desc":"Acknowledge and process soon"},{"id":"opt3","label":"Forward to finance team","desc":"Let them handle the details"},{"id":"opt4","label":"Call CEO on known number","desc":"Verify request via phone first"}]),"red_flags":json.dumps(["CEO requesting money via email","Asks for secrecy","Creates urgency pressure","No purchase order referenced"])},
+    {"category":"email","type":"Spear Phishing","difficulty":"Hard","sender_email":"hr-benefits@company-portal.com","sender_name":"HR Benefits Portal","subject":"Update your direct deposit info","body":"Hello,\n\nAs part of our annual payroll system upgrade, all employees must re-verify their direct deposit information by end of business Friday.\n\nPlease log in to the employee portal below and confirm your banking details:\n\nhttps://company-portal.com/payroll/verify\n\nEmployees who do not update may experience paycheck delays.\n\nBest regards,\nHuman Resources Department","correct_action":"opt3","options":json.dumps([{"id":"opt1","label":"Log in and update info","desc":"Ensure paycheck isn't delayed"},{"id":"opt2","label":"Reply to HR asking details","desc":"Get more context first"},{"id":"opt3","label":"Visit HR office in person","desc":"Ask HR directly about this"},{"id":"opt4","label":"Forward to IT to check","desc":"Let IT decide if legitimate"}]),"red_flags":json.dumps(["External domain pretending to be internal HR","Requests banking info via email link","Deadline pressure","Threatens paycheck delay"])},
 
-SEED_SCENARIOS = [
-    # ═══════════════════ EASY (6 scenarios) ═══════════════════
-    {
-        "type": "Phishing",
-        "difficulty": "Easy",
-        "sender_email": "support@amaz0n-security.com",
-        "sender_name": "Amazon Security",
-        "subject": "Your account has been locked!",
-        "body": "Dear Customer,\n\nWe detected suspicious activity on your Amazon account. Your account has been temporarily locked for security purposes.\n\nPlease click the link below to verify your identity and restore access within 24 hours or your account will be permanently deleted.\n\nVerify Now: https://amaz0n-security.com/verify-account\n\nThank you,\nAmazon Customer Protection Team",
-        "correct_action": "opt3",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Click verify link now", "desc": "Restore account access immediately"},
-            {"id": "opt2", "label": "Reply with my details", "desc": "Confirm my identity via email"},
-            {"id": "opt3", "label": "Open Amazon app directly", "desc": "Check for any real alerts there"},
-            {"id": "opt4", "label": "Forward link to friends", "desc": "Warn them to check their accounts"},
-        ]),
-        "red_flags": json.dumps([
-            "Fake domain — 'amaz0n' uses a zero instead of the letter 'o'",
-            "Urgency tactic — 24 hour deadline with threat of deletion",
-            "Generic greeting — 'Dear Customer' instead of your real name",
-            "Suspicious link pointing to a non-Amazon domain",
-        ]),
-    },
-    {
-        "type": "Smishing",
-        "difficulty": "Easy",
-        "sender_email": "sms@delivery-update.com",
-        "sender_name": "FedEx Delivery",
-        "subject": "Package delivery failed — action required",
-        "body": "FedEx Notification:\n\nYour package (Tracking: FX-8829103746) could not be delivered today due to an incomplete address.\n\nPlease update your delivery address within 12 hours to avoid return to sender:\n\nhttps://fedex-redelivery.com/update\n\nShipping fee adjustment: $2.99\n\nFedEx Customer Service",
-        "correct_action": "opt2",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Click link and pay $2.99", "desc": "Small fee to get my package"},
-            {"id": "opt2", "label": "Delete — not expecting package", "desc": "I did not order anything"},
-            {"id": "opt3", "label": "Reply with home address", "desc": "Fix the delivery address"},
-            {"id": "opt4", "label": "Call number from email", "desc": "Speak to FedEx about it"},
-        ]),
-        "red_flags": json.dumps([
-            "Fake domain 'fedex-redelivery.com' — not the real FedEx website",
-            "Asks for a small fee — classic bait to steal payment info",
-            "12-hour urgency window to pressure quick action",
-            "You may not be expecting any package at all",
-        ]),
-    },
-    {
-        "type": "Prize Scam",
-        "difficulty": "Easy",
-        "sender_email": "winner@lotterry-international.com",
-        "sender_name": "International Lottery",
-        "subject": "CONGRATULATIONS! You won $500,000",
-        "body": "DEAR LUCKY WINNER,\n\nWe are pleased to inform you that your email address was selected in our monthly international email lottery draw. You have won the sum of FIVE HUNDRED THOUSAND US DOLLARS ($500,000).\n\nTo claim your prize, please send us the following information:\n- Full Name\n- Home Address\n- Phone Number\n- A copy of your passport\n- Processing fee: $250\n\nReply to this email urgently as unclaimed prizes expire in 48 hours.\n\nDr. Michael Richardson\nClaims Officer",
-        "correct_action": "opt4",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Send my details to claim", "desc": "Collect my lottery winnings"},
-            {"id": "opt2", "label": "Pay the $250 processing fee", "desc": "To receive the prize money"},
-            {"id": "opt3", "label": "Reply asking for more info", "desc": "Learn more about the lottery"},
-            {"id": "opt4", "label": "Delete email permanently", "desc": "Obvious scam — ignore it"},
-        ]),
-        "red_flags": json.dumps([
-            "You never entered any lottery — can't win something you didn't enter",
-            "Asks for upfront fee — legitimate prizes never charge to claim",
-            "Requests passport copy — identity theft attempt",
-            "Misspelled domain 'lotterry' and ALL CAPS writing style",
-        ]),
-    },
-    {
-        "type": "Tech Support Scam",
-        "difficulty": "Easy",
-        "sender_email": "alerts@microsft-security.net",
-        "sender_name": "Microsoft Windows Defender",
-        "subject": "VIRUS DETECTED on your computer!",
-        "body": "URGENT SECURITY ALERT\n\nOur systems have detected 3 critical viruses on your computer. Your personal files, passwords, and banking information are AT RISK.\n\nError Code: #0x80070643\n\nImmediate action required. Call our Microsoft certified technicians NOW:\n+1-888-555-0199\n\nDo NOT turn off your computer or you may lose all your data permanently.\n\nMicrosoft Windows Security",
-        "correct_action": "opt1",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Close email, run my own antivirus", "desc": "Check with software I trust"},
-            {"id": "opt2", "label": "Call the number immediately", "desc": "Get help fixing the viruses"},
-            {"id": "opt3", "label": "Shut down computer right away", "desc": "Stop the viruses from spreading"},
-            {"id": "opt4", "label": "Forward to family members", "desc": "Warn them about viruses"},
-        ]),
-        "red_flags": json.dumps([
-            "Microsoft never sends virus alerts via email — they don't know your email",
-            "Misspelled domain 'microsft' missing an 'o'",
-            "Creates extreme fear with urgent all-caps language",
-            "Phone number is how scammers get you to pay for fake fixes",
-        ]),
-    },
-    {
-        "type": "Phishing",
-        "difficulty": "Easy",
-        "sender_email": "service@paypa1-support.com",
-        "sender_name": "PayPal Service",
-        "subject": "Unusual sign-in attempt blocked",
-        "body": "Hello User,\n\nWe blocked a sign-in attempt to your PayPal account from a new device located in Moscow, Russia.\n\nDevice: Windows PC\nLocation: Moscow, Russia\nTime: Today, 4:23 AM\n\nIf this was NOT you, click the button below to secure your account within 1 hour or we will permanently suspend your account:\n\n[SECURE MY ACCOUNT]: http://paypa1-support.com/secure\n\nPayPal Security Team",
-        "correct_action": "opt3",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Click 'Secure My Account' button", "desc": "Protect my PayPal fast"},
-            {"id": "opt2", "label": "Reply denying it was me", "desc": "Tell them I wasn't in Moscow"},
-            {"id": "opt3", "label": "Log into paypal.com directly", "desc": "Check activity from official site"},
-            {"id": "opt4", "label": "Email PayPal asking for help", "desc": "Reply to this email for support"},
-        ]),
-        "red_flags": json.dumps([
-            "Fake domain — 'paypa1' uses the number 1 instead of letter 'l'",
-            "Uses http:// not https:// — not secure",
-            "Generic 'Hello User' instead of your actual name",
-            "Extreme urgency: 1-hour deadline to pressure hasty clicks",
-        ]),
-    },
-    {
-        "type": "Fake Charity",
-        "difficulty": "Easy",
-        "sender_email": "donate@help-victims-now.org",
-        "sender_name": "Disaster Relief Fund",
-        "subject": "Help victims TODAY — donate to save lives",
-        "body": "Dear Friend,\n\nA massive earthquake has devastated thousands of families. Children are starving. Homes are destroyed.\n\nYOUR DONATION CAN SAVE LIVES RIGHT NOW.\n\nPlease donate any amount via the link below. Every dollar counts. Bitcoin and gift cards also accepted for faster relief.\n\nDonate Now: http://help-victims-now.org/donate-bitcoin\n\nOr send Amazon/Apple gift cards to: gifts@help-victims-now.org\n\nGod bless you for your generosity.\n\nRev. Patrick Johnson\nDisaster Relief Fund",
-        "correct_action": "opt2",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Send Bitcoin donation", "desc": "Help victims quickly"},
-            {"id": "opt2", "label": "Research charity on official sites", "desc": "Verify through charitynavigator.org first"},
-            {"id": "opt3", "label": "Send Amazon gift cards", "desc": "Fast way to donate"},
-            {"id": "opt4", "label": "Forward to my friends", "desc": "Spread awareness of disaster"},
-        ]),
-        "red_flags": json.dumps([
-            "Real charities never accept donations via gift cards — huge red flag",
-            "Bitcoin-only donation is almost always a scam",
-            "Emotional manipulation with 'starving children' language",
-            "Unknown charity with vague details — no registration number",
-        ]),
-    },
+    # ══════ FAKE WEBSITE SCENARIOS ══════
+    {"category":"website","type":"Fake Login","difficulty":"Easy","subject":"Fake Amazon Login Page","body":"You receive an email saying your Amazon order has a delivery issue. You click the link and land on what looks like Amazon's login page.\n\nThe page has the Amazon logo at the top, a sign-in form asking for your email and password, and a 'Sign In' button. Below it says 'New to Amazon? Create your account.'\n\nHowever, looking more closely:\n- The URL bar shows: http://amaz0n-login.com/signin\n- There is no padlock icon (no SSL)\n- The logo looks slightly pixelated\n- The footer says '© 2021 Amazon' (outdated year)\n- The 'Create account' link doesn't work","correct_action":"opt2","options":json.dumps([{"id":"opt1","label":"Enter my Amazon password","desc":"Sign in to check my order"},{"id":"opt2","label":"Close tab, open amazon.com","desc":"Go to real Amazon directly"},{"id":"opt3","label":"Try the Create Account link","desc":"Test if the site works"},{"id":"opt4","label":"Enter a fake password to test","desc":"See what happens with wrong info"}]),"red_flags":json.dumps(["URL is 'amaz0n-login.com' not 'amazon.com'","No HTTPS/SSL padlock icon","Pixelated logo — copied, not official","Outdated copyright year 2021"]),"extra_data":json.dumps({"fake_url":"http://amaz0n-login.com/signin","real_url":"https://www.amazon.com/signin","ssl_valid":False,"domain_age":"3 days","visual_differences":["Pixelated logo","No SSL padlock","Outdated footer year","Dead links"]})},
+    {"category":"website","type":"Clone Site","difficulty":"Medium","subject":"Fake Microsoft 365 Login","body":"Your IT department sent an email about a mandatory password reset. The link takes you to a Microsoft 365 login page.\n\nThe page looks professional with the Microsoft logo, a clean sign-in form, and the text 'Sign in to your account.' The design matches Microsoft's current style.\n\nBut examining closely:\n- URL: https://microsoft365-login.net/oauth\n- SSL certificate shows valid (green padlock)\n- The page loads slightly slower than usual\n- After entering email, it asks for both password AND phone number on the same page (real Microsoft asks for these separately)\n- The 'Can't access your account?' link goes to the same page","correct_action":"opt3","options":json.dumps([{"id":"opt1","label":"Enter my work credentials","desc":"Complete the password reset"},{"id":"opt2","label":"Enter email only first","desc":"See what happens next"},{"id":"opt3","label":"Go to office.com directly","desc":"Reset from official portal"},{"id":"opt4","label":"Reply to IT email asking","desc":"Confirm via email"}]),"red_flags":json.dumps(["Domain 'microsoft365-login.net' is not microsoft.com","Asks for password AND phone together — unusual","Help links loop back to same page","Slower loading — hosted on cheap server"]),"extra_data":json.dumps({"fake_url":"https://microsoft365-login.net/oauth","real_url":"https://login.microsoftonline.com","ssl_valid":True,"domain_age":"12 days","visual_differences":["Password and phone on same page","Help links don't work","Slightly slow loading","Missing language selector"]})},
+    {"category":"website","type":"Banking Clone","difficulty":"Hard","subject":"Fake Chase Bank Portal","body":"You receive a text about unusual activity on your Chase account. The link opens what appears to be Chase's online banking portal.\n\nThe page is nearly identical to Chase's real site: correct blue color scheme, the Chase logo, navigation menu with 'Personal | Business | Commercial', and a login form with 'Username' and 'Password' fields.\n\nVery subtle differences:\n- URL: https://chase-secure-banking.com/login (not chase.com)\n- The 'Forgot Password' link works but goes to a different-looking page\n- In the footer, 'JPMorgan Chase & Co.' link doesn't navigate anywhere\n- The 'Enroll' button for new users leads to an error page\n- Browser shows a valid SSL certificate but issued to 'Chase Banking LLC' not 'JPMorgan Chase'","correct_action":"opt1","options":json.dumps([{"id":"opt1","label":"Call number on card back","desc":"Verify with Chase directly"},{"id":"opt2","label":"Enter username only","desc":"See if it recognizes me"},{"id":"opt3","label":"Check the SSL certificate","desc":"Verify who owns the cert"},{"id":"opt4","label":"Use the Forgot Password link","desc":"Test if the site is real"}]),"red_flags":json.dumps(["Domain 'chase-secure-banking.com' not 'chase.com'","SSL cert issued to wrong entity","Footer links non-functional","Enroll button leads to error page"]),"extra_data":json.dumps({"fake_url":"https://chase-secure-banking.com/login","real_url":"https://www.chase.com","ssl_valid":True,"domain_age":"8 days","visual_differences":["Wrong SSL certificate issuer","Dead footer links","Enroll button broken","Subtle font mismatch"]})},
 
-    # ═══════════════════ MEDIUM (6 scenarios) ═══════════════════
-    {
-        "type": "BEC",
-        "difficulty": "Medium",
-        "sender_email": "ceo.james@company-mail.net",
-        "sender_name": "James Wright (CEO)",
-        "subject": "Urgent wire transfer needed",
-        "body": "Hi,\n\nI need you to process a wire transfer of $32,000 to a new supplier immediately. I'm traveling and can't do it myself.\n\nWire to:\nBank: Pacific Trust\nAccount: 7739201854\n\nPlease handle this right away and don't mention it to others — the deal is confidential until announced.\n\nThanks,\nJames\n\nSent from my iPhone",
-        "correct_action": "opt4",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Process transfer immediately", "desc": "Help the CEO with urgent deal"},
-            {"id": "opt2", "label": "Reply confirming receipt", "desc": "Acknowledge and process soon"},
-            {"id": "opt3", "label": "Forward to finance team", "desc": "Let them handle the details"},
-            {"id": "opt4", "label": "Call CEO on known number", "desc": "Verify request via phone first"},
-        ]),
-        "red_flags": json.dumps([
-            "CEO requesting money transfer via email — bypasses normal approval process",
-            "Asks for secrecy — 'don't mention it to others'",
-            "Creates pressure with urgency — 'immediately'",
-            "No reference to any purchase order or documentation",
-        ]),
-    },
-    {
-        "type": "Pretexting",
-        "difficulty": "Medium",
-        "sender_email": "it.helpdesk@corp-support.org",
-        "sender_name": "IT Help Desk",
-        "subject": "Mandatory password reset — security audit",
-        "body": "Dear Employee,\n\nAs part of our quarterly security audit, the IT department requires all employees to reset their network passwords by EOD today.\n\nPlease use the secure link below to update your credentials:\n\nhttps://corp-support.org/password-reset\n\nYou will need to enter your current password followed by your new password. Failure to comply will result in temporary account suspension.\n\nRegards,\nIT Security Team\nHelp Desk Ticket #IT-4492",
-        "correct_action": "opt1",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Call IT desk on posted number", "desc": "Verify this is a real request"},
-            {"id": "opt2", "label": "Click link and reset password", "desc": "Comply with security audit"},
-            {"id": "opt3", "label": "Reply asking for verification", "desc": "Get confirmation via email"},
-            {"id": "opt4", "label": "Share with all colleagues", "desc": "Remind everyone to reset"},
-        ]),
-        "red_flags": json.dumps([
-            "External domain 'corp-support.org' impersonating internal IT",
-            "Requests current password — legitimate resets never ask for this",
-            "Threat of account suspension creates fear",
-            "Fake ticket number adds false legitimacy",
-        ]),
-    },
-    {
-        "type": "Invoice Fraud",
-        "difficulty": "Medium",
-        "sender_email": "billing@office-supplies-inc.co",
-        "sender_name": "Office Supplies Inc",
-        "subject": "Invoice #4472 — Payment overdue",
-        "body": "Dear Accounts Payable,\n\nThis is a reminder that Invoice #4472 dated September 15 for $4,847.50 remains unpaid.\n\nProduct: Office supplies and printer toner\nDelivered to: Main Office, Building A\nPO Reference: PO-2024-0918\n\nPlease process payment within 5 business days to avoid late fees. Updated bank details for payment:\n\nAccount Name: Office Supplies Inc\nBank: Regional Commerce Bank  \nAccount: 4482817193\n\nIf you have any questions, please reply to this email.\n\nSarah Thompson\nBilling Department",
-        "correct_action": "opt2",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Process payment right away", "desc": "Avoid late fees and penalties"},
-            {"id": "opt2", "label": "Check records for PO-2024-0918", "desc": "Verify purchase order exists internally"},
-            {"id": "opt3", "label": "Reply asking for invoice details", "desc": "Engage with vendor to learn more"},
-            {"id": "opt4", "label": "Pay to updated bank account", "desc": "Use the new bank info provided"},
-        ]),
-        "red_flags": json.dumps([
-            "Unexpected invoice with no internal record of purchase",
-            "Bank account details changed — classic invoice fraud tactic",
-            "Suspicious .co domain (not .com) — look-alike domain",
-            "Pressure to pay within 5 days without verification",
-        ]),
-    },
-    {
-        "type": "Clone Phishing",
-        "difficulty": "Medium",
-        "sender_email": "notifications@dropbox-share.com",
-        "sender_name": "Dropbox",
-        "subject": "Sarah Miller shared 'Q4_Financial_Report.pdf' with you",
-        "body": "Hi,\n\nSarah Miller (sarah.m@yourcompany.com) has shared a file with you using Dropbox.\n\nFile: Q4_Financial_Report.pdf\nMessage: 'Please review this before tomorrow's board meeting. Let me know your thoughts.'\n\nView file: https://dropbox-share.com/d/view/8491203\n\nThis link will expire in 24 hours for security.\n\nDropbox Team",
-        "correct_action": "opt3",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Click link to view file", "desc": "Review the Q4 report now"},
-            {"id": "opt2", "label": "Reply to Sarah for context", "desc": "Ask what the file contains"},
-            {"id": "opt3", "label": "Message Sarah on Teams/Slack", "desc": "Confirm she actually shared this"},
-            {"id": "opt4", "label": "Download PDF immediately", "desc": "Save for board meeting"},
-        ]),
-        "red_flags": json.dumps([
-            "Wrong domain 'dropbox-share.com' instead of real 'dropbox.com'",
-            "Uses a known coworker's name to build trust (found on LinkedIn)",
-            "Artificial 24-hour expiration creates urgency",
-            "Real Dropbox shares come from dropbox.com, not lookalike domains",
-        ]),
-    },
-    {
-        "type": "Gift Card Scam",
-        "difficulty": "Medium",
-        "sender_email": "r.martinez@ceo-gmail.com",
-        "sender_name": "Robert Martinez",
-        "subject": "Quick favor — are you available?",
-        "body": "Hi,\n\nAre you at your desk? I need a small favor.\n\nI'm heading into a client meeting and need to send gift cards to a few clients as a thank-you gesture. Can you buy 5 Apple App Store gift cards, $100 each, from the store? I'll reimburse you tomorrow.\n\nOnce you have them, please scratch off the back and email me the codes. I'll take care of the rest from there.\n\nThis needs to be done in the next hour. Please keep this between us as it's a surprise for the clients.\n\nThanks for your help.\n\nRobert\nCEO",
-        "correct_action": "opt4",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Buy cards, send codes by email", "desc": "Help the CEO quickly"},
-            {"id": "opt2", "label": "Reply asking for reimbursement first", "desc": "Confirm I'll be paid back"},
-            {"id": "opt3", "label": "Buy cards but call CEO first", "desc": "Verify on phone before sending"},
-            {"id": "opt4", "label": "Stop by CEO's office in person", "desc": "Ask face-to-face if real request"},
-        ]),
-        "red_flags": json.dumps([
-            "CEO using Gmail address instead of company email",
-            "Gift cards for business payments is a massive red flag",
-            "Asks for secrecy — 'keep this between us'",
-            "Urgency pressure — 'next hour' to prevent verification",
-        ]),
-    },
-    {
-        "type": "Credential Harvesting",
-        "difficulty": "Medium",
-        "sender_email": "noreply@microsoft-365-security.com",
-        "sender_name": "Microsoft 365 Admin",
-        "subject": "Your mailbox is 95% full — upgrade now",
-        "body": "Mailbox Storage Alert\n\nYour Microsoft 365 mailbox (aarin@company.com) is 95% full. You may stop receiving emails if storage is not freed up within 48 hours.\n\nAs a courtesy, we are offering FREE storage upgrades to 100GB for all users this week.\n\nClick below to upgrade your storage at no cost:\n\nUpgrade Now: https://microsoft-365-security.com/storage-upgrade\n\nSign in with your Microsoft 365 credentials to apply the upgrade.\n\nMicrosoft 365 Administration",
-        "correct_action": "opt2",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Click upgrade link and sign in", "desc": "Get free 100GB upgrade"},
-            {"id": "opt2", "label": "Check storage in Outlook directly", "desc": "Verify from actual Microsoft 365"},
-            {"id": "opt3", "label": "Reply asking for more details", "desc": "Get info before upgrading"},
-            {"id": "opt4", "label": "Forward to colleagues", "desc": "Share the free upgrade offer"},
-        ]),
-        "red_flags": json.dumps([
-            "Microsoft doesn't send mailbox alerts from 'microsoft-365-security.com'",
-            "Free upgrades out of nowhere are classic bait",
-            "Link asks for Microsoft credentials — credential harvesting trap",
-            "Arbitrary 48-hour deadline creates unnecessary urgency",
-        ]),
-    },
+    # ══════ QR CODE SCENARIOS ══════
+    {"category":"qr","type":"QR Phishing","difficulty":"Easy","subject":"Free WiFi QR at coffee shop","body":"You're at a coffee shop and notice a QR code taped to the wall next to a handwritten sign: 'FREE HIGH-SPEED WIFI - Scan to Connect!'\n\nThe QR code is printed on a plain white sticker that looks like it was placed recently — the edges are slightly peeling. The coffee shop's regular WiFi name is printed on the official menu as 'CafeConnect_5G'.\n\nWhen you scan the QR code with your phone camera, the preview shows it leads to: http://free-wifi-login.xyz/connect\n\nThe page asks you to enter your email and create a password to 'activate free premium WiFi access.'","correct_action":"opt3","options":json.dumps([{"id":"opt1","label":"Enter email and connect","desc":"Get free fast WiFi"},{"id":"opt2","label":"Use the password from menu","desc":"Connect to official WiFi"},{"id":"opt3","label":"Ask staff about the QR","desc":"Verify if it's from the shop"},{"id":"opt4","label":"Scan and just browse first","desc":"See if WiFi works before login"}]),"red_flags":json.dumps(["Sticker looks recently added — not official","URL is .xyz domain, not the shop's","Asks for email and password creation","Official WiFi is already listed on menu"]),"extra_data":json.dumps({"location":"Coffee shop wall","claimed_purpose":"Free WiFi access","actual_destination":"http://free-wifi-login.xyz/connect","qr_placement":"Sticker taped next to handwritten sign"})},
+    {"category":"qr","type":"Payment QR Swap","difficulty":"Medium","subject":"Restaurant payment QR code","body":"You just finished dinner at a restaurant. The waiter brings the bill with a QR code at the bottom: 'Scan to pay with any UPI/payment app.'\n\nYou notice the QR code sticker looks like it was placed OVER another QR code underneath — the edges of the top sticker are slightly raised. The restaurant name on the bill says 'Bella Italia' but when you scan the QR code, your payment app shows the recipient as 'FOODY_SERVICES_2024' instead of 'Bella Italia Restaurant.'\n\nThe amount matches your bill: $47.85. The payment page looks normal otherwise.","correct_action":"opt4","options":json.dumps([{"id":"opt1","label":"Pay — amount matches","desc":"Bill amount is correct"},{"id":"opt2","label":"Add a tip and pay","desc":"Complete the payment"},{"id":"opt3","label":"Ask for cash payment instead","desc":"Avoid QR altogether"},{"id":"opt4","label":"Show waiter the mismatch","desc":"Alert staff about wrong name"}]),"red_flags":json.dumps(["QR sticker placed over another QR — tampered","Recipient name doesn't match restaurant","'FOODY_SERVICES_2024' is not Bella Italia","Physical QR swap is a common attack method"]),"extra_data":json.dumps({"location":"Restaurant bill","claimed_purpose":"Pay restaurant bill","actual_destination":"Payment to FOODY_SERVICES_2024","qr_placement":"Sticker placed over original QR code"})},
 
-    # ═══════════════════ HARD (6 scenarios) ═══════════════════
-    {
-        "type": "Spear Phishing",
-        "difficulty": "Hard",
-        "sender_email": "hr-benefits@company-portal.com",
-        "sender_name": "HR Benefits Portal",
-        "subject": "Action required: Update your direct deposit",
-        "body": "Hello,\n\nAs part of our annual payroll system upgrade, all employees must re-verify their direct deposit information by end of business Friday.\n\nPlease log in to the employee portal below and confirm your banking details:\n\nhttps://company-portal.com/payroll/verify\n\nEmployees who do not update their information may experience delays in their next paycheck.\n\nBest regards,\nHuman Resources Department\nInternal Communications",
-        "correct_action": "opt3",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Log in and update banking info", "desc": "Ensure paycheck isn't delayed"},
-            {"id": "opt2", "label": "Reply to HR asking for details", "desc": "Get more context first"},
-            {"id": "opt3", "label": "Visit HR office in person", "desc": "Ask HR directly about this"},
-            {"id": "opt4", "label": "Forward to IT to check", "desc": "Let IT decide if legitimate"},
-        ]),
-        "red_flags": json.dumps([
-            "External domain 'company-portal.com' pretending to be internal HR",
-            "Requests sensitive banking information via email link",
-            "Deadline pressure — 'end of business Friday'",
-            "Threatens paycheck delay to create urgency",
-        ]),
-    },
-    {
-        "type": "Whaling",
-        "difficulty": "Hard",
-        "sender_email": "legal@external-counsel.com",
-        "sender_name": "Morrison & Associates LLP",
-        "subject": "Confidential: Pending litigation matter",
-        "body": "Dear Director,\n\nOur firm has been retained regarding a matter involving your organization. We have been authorized to share preliminary documentation with senior leadership.\n\nDue to the sensitive nature of this case, we kindly request that you review the attached documents at your earliest convenience and respond directly to this email.\n\nPlease do not forward this communication to other parties until we have had an opportunity to discuss next steps.\n\nThe attached file requires your corporate credentials to access.\n\nSincerely,\nRobert Morrison, Esq.\nMorrison & Associates LLP\nConfidentiality Notice: This communication is privileged.",
-        "correct_action": "opt4",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Open the attachment carefully", "desc": "Review the legal documents"},
-            {"id": "opt2", "label": "Reply asking for more context", "desc": "Engage to learn about the case"},
-            {"id": "opt3", "label": "Enter credentials to view file", "desc": "Access the sensitive documents"},
-            {"id": "opt4", "label": "Contact our company's legal team", "desc": "Let internal counsel handle it"},
-        ]),
-        "red_flags": json.dumps([
-            "Unsolicited legal communication from unknown firm",
-            "Requests corporate credentials to open attachment",
-            "Asks recipient not to forward — isolating the target",
-            "Uses legal language and confidentiality notice to intimidate",
-        ]),
-    },
-    {
-        "type": "Supply Chain Attack",
-        "difficulty": "Hard",
-        "sender_email": "updates@vendor-portal.io",
-        "sender_name": "SaaSly Vendor Updates",
-        "subject": "SaaSly v4.2 security patch — manual install required",
-        "body": "Dear IT Administrator,\n\nWe recently identified a high-severity vulnerability (CVE-2024-47188) in SaaSly v4.1 affecting customer data integrity.\n\nA patch (v4.2) has been released. Due to the critical nature, automatic updates are temporarily disabled. Please download and install manually:\n\nDownload: https://vendor-portal.io/saasly/v4.2-patch.exe\n\nInstallation instructions:\n1. Run the installer as administrator\n2. Allow firewall exception when prompted\n3. Restart affected servers\n\nThis patch has been reviewed and signed by our security team. Please prioritize installation before Tuesday.\n\nBest regards,\nSaaSly Security Response Team",
-        "correct_action": "opt3",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Download and run the patch", "desc": "Fix the vulnerability quickly"},
-            {"id": "opt2", "label": "Install on test server first", "desc": "Try before production rollout"},
-            {"id": "opt3", "label": "Log into SaaSly official portal", "desc": "Verify patch exists there first"},
-            {"id": "opt4", "label": "Reply requesting signed certificate", "desc": "Ask for proof of authenticity"},
-        ]),
-        "red_flags": json.dumps([
-            "Unusual .io domain instead of vendor's normal domain",
-            "Asks to disable firewall during install — classic malware tactic",
-            "Manual patch install bypassing normal update process is suspicious",
-            "Fake CVE number — verify before trusting any reference",
-        ]),
-    },
-    {
-        "type": "Romance Scam",
-        "difficulty": "Hard",
-        "sender_email": "lisa.nguyen@gmail.com",
-        "sender_name": "Lisa Nguyen",
-        "subject": "Re: Investment opportunity — happy to help",
-        "body": "Hi,\n\nIt was so great chatting with you over the past few weeks! I've really enjoyed getting to know you. You mentioned you were interested in crypto investing, and I wanted to follow up.\n\nMy uncle works at a hedge fund and gave me access to an exclusive crypto platform that has been giving him 8-12% returns monthly. I've been using it for 3 months and withdrew $15,000 already.\n\nHere's the platform I use: https://crypto-elite-partners.com/signup?ref=lisa992\n\nIf you want to try, use my referral link and I'll help you get started. Start with $500 to test it. I promise you'll be impressed.\n\nBy the way, my uncle said the special access expires this weekend, so if you want in, let me know ASAP. I'll walk you through it on WhatsApp.\n\nTalk soon!\nLisa 💕",
-        "correct_action": "opt2",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Sign up with her referral link", "desc": "Try her exclusive platform"},
-            {"id": "opt2", "label": "Stop contact and cut ties", "desc": "Classic long-con crypto scam"},
-            {"id": "opt3", "label": "Move conversation to WhatsApp", "desc": "Discuss details privately"},
-            {"id": "opt4", "label": "Start with small $500 test", "desc": "Minimize risk while trying"},
-        ]),
-        "red_flags": json.dumps([
-            "Unbelievable returns — 8-12% monthly is impossible for legitimate investments",
-            "Long relationship-building before the pitch is classic romance/pig-butchering scam",
-            "Creates urgency with 'expires this weekend' deadline",
-            "Unknown platform with referral links — no regulation or oversight",
-        ]),
-    },
-    {
-        "type": "Angler Phishing",
-        "difficulty": "Hard",
-        "sender_email": "support@customer-care-team.com",
-        "sender_name": "Chase Customer Support",
-        "subject": "Re: Your recent tweet about Chase Bank",
-        "body": "Dear Valued Customer,\n\nWe noticed your recent tweet expressing frustration with our mobile app (@YourHandle — 'Chase app keeps crashing!').\n\nWe sincerely apologize for this inconvenience. Our support team would like to resolve this immediately and offer you a $50 courtesy credit for the trouble.\n\nTo process your credit and troubleshoot the issue, please verify your account by clicking the link below:\n\nhttps://customer-care-team.com/chase-verify\n\nYou will need to confirm:\n- Full name\n- Account number\n- Last 4 of SSN\n- Mobile app PIN\n\nWe appreciate your patience and loyalty.\n\nBest regards,\nChase Customer Care",
-        "correct_action": "opt1",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Call Chase on card back number", "desc": "Verify from trusted phone number"},
-            {"id": "opt2", "label": "Click link to get $50 credit", "desc": "Claim the courtesy compensation"},
-            {"id": "opt3", "label": "Reply with account number only", "desc": "Share minimum info to verify"},
-            {"id": "opt4", "label": "Tweet back thanking them", "desc": "Acknowledge the response"},
-        ]),
-        "red_flags": json.dumps([
-            "Real Chase emails come from chase.com, not 'customer-care-team.com'",
-            "Angler phishing — attackers monitor social media for complaints and pounce",
-            "Asks for SSN, PIN, and account number — banks NEVER ask this in email",
-            "Courtesy credit offered as bait to encourage action",
-        ]),
-    },
-    {
-        "type": "Watering Hole",
-        "difficulty": "Hard",
-        "sender_email": "events@industry-conference-2024.org",
-        "sender_name": "DevSec Summit 2024",
-        "subject": "DevSec Summit — speaker slides and resources",
-        "body": "Hi,\n\nThank you for attending DevSec Summit 2024 last week! We hope you enjoyed the sessions.\n\nAs promised, here are all the speaker slides, workshop materials, and recording links from the event. You registered using this email, so we're sending you the full resource package.\n\nAccess resources: https://industry-conference-2024.org/attendees/resources\n\nHighlights included:\n- Keynote: Zero Trust Architecture (Dr. Angela Chen)\n- Workshop: Threat modeling with STRIDE\n- Panel: Supply chain security post-SolarWinds\n\nThe resources will be available until December 15. Login with the email you registered with.\n\nSee you next year!\n\nDevSec Summit Organizers",
-        "correct_action": "opt3",
-        "options": json.dumps([
-            {"id": "opt1", "label": "Click link and log in", "desc": "Access conference materials"},
-            {"id": "opt2", "label": "Reply confirming I attended", "desc": "Verify my registration"},
-            {"id": "opt3", "label": "Search for official conference site", "desc": "Go to it directly in new browser"},
-            {"id": "opt4", "label": "Forward to colleagues who attended", "desc": "Share the resources"},
-        ]),
-        "red_flags": json.dumps([
-            "You may not have attended this conference — check your records",
-            "Suspicious domain with year in it instead of brand name",
-            "Uses real conference names and speakers to seem legitimate",
-            "Deadline pressure ('until December 15') pushes quick clicks",
-        ]),
-    },
+    # ══════ VISHING SCENARIOS ══════
+    {"category":"vishing","type":"Bank Call Scam","difficulty":"Easy","subject":"Fake bank fraud department call","body":"Caller: Hello, this is the fraud detection department from your bank. Am I speaking with the account holder?\n\nYou: Yes, who is this?\n\nCaller: Ma'am/Sir, we've detected three unauthorized transactions on your debit card totaling $2,847. We need to verify your identity RIGHT NOW to block further charges.\n\nYou: What transactions?\n\nCaller: I cannot share details over the phone for security reasons until you verify your identity. Please confirm your full card number, the CVV on the back, and your date of birth.\n\nYou: That seems like a lot of information...\n\nCaller: I understand your concern, but if we don't act in the next 5 minutes, the thieves will drain your entire account. We're trying to PROTECT you. Every second counts. What is your card number?","correct_action":"opt2","options":json.dumps([{"id":"opt1","label":"Give card number to help","desc":"They need it to block fraud"},{"id":"opt2","label":"Hang up, call bank directly","desc":"Use number on card back"},{"id":"opt3","label":"Give only date of birth","desc":"Share minimal info"},{"id":"opt4","label":"Ask for their badge number","desc":"Verify they're real"}]),"red_flags":json.dumps(["Real banks never ask for full card number over phone","Extreme urgency — '5 minutes' pressure","Refuses to share transaction details first","Asks for CVV — banks already have this"]),"extra_data":json.dumps({"caller_id":"+1-800-555-0147 (Bank Fraud Dept)","claimed_organization":"Your Bank Fraud Department","tactics_used":["urgency","fear","authority"],"info_requested":["card number","CVV","date of birth"]})},
+    {"category":"vishing","type":"Tech Support Scam","difficulty":"Medium","subject":"Microsoft tech support call","body":"Caller: Good afternoon. I'm calling from Microsoft Windows Technical Support. My name is Kevin. We've received automated alerts from your computer showing it has been infected with a dangerous virus. Your Windows license may also be at risk.\n\nYou: How did you get my number?\n\nCaller: Your computer sends diagnostic data to Microsoft servers. Our system flagged your IP address for malicious activity. I can help you fix this today at no charge. First, I'll need you to open your computer.\n\nYou: Okay, I'm at my computer.\n\nCaller: Great. Press the Windows key and R at the same time. Now type 'eventvwr' and press Enter. Do you see some warnings and errors listed there?\n\nYou: Yes, there are some yellow and red icons.\n\nCaller: Those are the infections I was telling you about. Very serious. I need you to now go to this website: support-fix-now.com and download our remote access tool so I can clean your system.\n\nYou: A remote access tool?","correct_action":"opt3","options":json.dumps([{"id":"opt1","label":"Download the tool to fix","desc":"Let them clean the virus"},{"id":"opt2","label":"Ask for employee ID first","desc":"Verify their identity"},{"id":"opt3","label":"Hang up immediately","desc":"Microsoft doesn't call you"},{"id":"opt4","label":"Check Event Viewer myself","desc":"Verify the warnings are real"}]),"red_flags":json.dumps(["Microsoft never makes unsolicited support calls","Event Viewer ALWAYS has warnings — they're normal","Asking to install remote access tool — gives them control","'support-fix-now.com' is not a Microsoft domain"]),"extra_data":json.dumps({"caller_id":"+1-800-555-0199 (Microsoft Support)","claimed_organization":"Microsoft Windows Technical Support","tactics_used":["authority","technical jargon","fear"],"info_requested":["remote access","computer control"]})},
+
+    # ══════ USB DROP SCENARIOS ══════
+    {"category":"usb","type":"Curiosity Bait","difficulty":"Easy","subject":"USB labeled 'Employee Salaries 2024' in parking lot","body":"You arrive at work and find a USB flash drive on the ground in the company parking lot. It's a cheap-looking black USB with a handwritten sticky label that reads:\n\n'CONFIDENTIAL - Employee Salaries Q4 2024'\n\nThe USB looks relatively new and clean. No one else seems to have noticed it. You're curious about whether your salary matches your colleagues'.\n\nIf you were to plug it into your work computer, your file explorer would show:\n- Salaries_Q4_2024.xlsx (2.3 MB)\n- Bonus_Structure_Confidential.pdf (890 KB)\n- HR_Notes_Performance_Reviews.docx (445 KB)\n\nHidden from view: an autorun.inf file and a malware executable that would install a keylogger capturing everything you type, including passwords and banking details.","correct_action":"opt3","options":json.dumps([{"id":"opt1","label":"Plug in to check contents","desc":"Satisfy my curiosity"},{"id":"opt2","label":"Plug into personal phone","desc":"Safer than work computer"},{"id":"opt3","label":"Turn it in to IT security","desc":"Let professionals handle it"},{"id":"opt4","label":"Throw it in the trash","desc":"Not worth the risk"}]),"red_flags":json.dumps(["'Confidential salary' label is designed to trigger curiosity","USB found in public area — classic drop attack","Handwritten label — not official IT equipment","Hidden autorun malware installs keylogger"]),"extra_data":json.dumps({"found_location":"Company parking lot","usb_label":"CONFIDENTIAL - Employee Salaries Q4 2024","usb_appearance":"Cheap black USB with handwritten sticky label","files_if_opened":["Salaries_Q4_2024.xlsx","Bonus_Structure_Confidential.pdf","HR_Notes_Performance_Reviews.docx"],"hidden_payload":"Autorun malware installing keylogger"})},
+    {"category":"usb","type":"Branded USB","difficulty":"Hard","subject":"Company-branded USB in conference room","body":"After a client meeting in your company's main conference room, you notice a USB flash drive left on the table. It's a sleek branded USB with your company's logo printed on it — the same type given out at last quarter's company town hall.\n\nA small label on the back reads: 'Q3 Board Presentation - Final v2'\n\nIt looks completely legitimate — same branding, same USB model your company uses for official presentations. You recall that the board presentation from last quarter was never shared with your department.\n\nIf plugged in, the USB shows:\n- Q3_Board_Presentation_Final.pptx (15.2 MB)\n- Financial_Summary_Q3.xlsx (3.1 MB)\n- Strategic_Roadmap_2025.pdf (5.4 MB)\n\nThe files appear to open normally, but a hidden script silently installs a backdoor that gives an attacker persistent access to your network.","correct_action":"opt2","options":json.dumps([{"id":"opt1","label":"Open it — it's company branded","desc":"Looks official and legitimate"},{"id":"opt2","label":"Give to IT for scanning first","desc":"Let them verify it's safe"},{"id":"opt3","label":"Ask colleagues who left it","desc":"Find the owner"},{"id":"opt4","label":"Open on a personal laptop","desc":"Keep work computer safe"}]),"red_flags":json.dumps(["Attackers can easily clone company-branded USBs","Left after client meeting — outsiders had access","Board presentations are typically shared via email/cloud, not USB","Hidden backdoor installs even when files appear normal"]),"extra_data":json.dumps({"found_location":"Company conference room after client meeting","usb_label":"Q3 Board Presentation - Final v2","usb_appearance":"Sleek branded USB with company logo, identical to official ones","files_if_opened":["Q3_Board_Presentation_Final.pptx","Financial_Summary_Q3.xlsx","Strategic_Roadmap_2025.pdf"],"hidden_payload":"Silent backdoor script granting persistent network access"})},
 ]
-
 
 def seed_database():
     db = SessionLocal()
     try:
         existing = db.query(Scenario).filter(Scenario.is_ai_generated == False).count()
-        if existing < len(SEED_SCENARIOS):
-            # Delete old seed scenarios that users haven't interacted with
-            # Actually just add new ones - the duplicates logic handles it
-            existing_subjects = set(
-                s.subject for s in db.query(Scenario).filter(Scenario.is_ai_generated == False).all()
-            )
+        if existing < len(SEED):
+            existing_subjects = set(s.subject for s in db.query(Scenario).filter(Scenario.is_ai_generated == False).all())
             added = 0
-            for data in SEED_SCENARIOS:
+            for data in SEED:
                 if data["subject"] not in existing_subjects:
                     scenario = Scenario(**data, is_ai_generated=False)
                     db.add(scenario)
@@ -408,6 +40,6 @@ def seed_database():
             db.commit()
             print(f"Seeded {added} new scenarios (total: {existing + added})")
         else:
-            print(f"Database already has {existing} static scenarios, skipping seed")
+            print(f"Database has {existing} static scenarios, skipping seed")
     finally:
         db.close()
