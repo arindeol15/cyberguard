@@ -314,21 +314,44 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         {scenario.extra_data && category === 'qr' && (
           <div style={{ padding: '14px 20px', borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#999', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>QR scan preview</div>
-            <div style={{ fontSize: 12, color: '#555', lineHeight: 1.8 }}>
-              <div>Location: {scenario.extra_data.location}</div>
-              <div>Claims to be: {scenario.extra_data.claimed_purpose}</div>
-              <div>Placement: {scenario.extra_data.qr_placement}</div>
+            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+              {/* QR Code Image */}
+              <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 12, flexShrink: 0 }}>
+                <QRCode url={scenario.extra_data.actual_destination || scenario.extra_data.qr_url || 'https://malicious-site.com'} />
+                <div style={{ fontSize: 10, color: '#c62828', textAlign: 'center', marginTop: 6, fontFamily: 'monospace' }}>Scanned QR destination</div>
+              </div>
+              <div style={{ fontSize: 12, color: '#555', lineHeight: 1.8 }}>
+                <div><strong>Location:</strong> {scenario.extra_data.location}</div>
+                <div><strong>Claims to be:</strong> {scenario.extra_data.claimed_purpose}</div>
+                <div><strong>Placement:</strong> {scenario.extra_data.qr_placement}</div>
+                {scenario.extra_data.redirect_chain && (
+                  <div style={{ marginTop: 6 }}>
+                    <strong>Redirect chain:</strong>
+                    {scenario.extra_data.redirect_chain.map((url, i) => (
+                      <div key={i} style={{ fontFamily: 'monospace', fontSize: 11, color: '#c62828', marginLeft: 8 }}>
+                        {i > 0 && '→ '}{url}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
         {scenario.extra_data && category === 'vishing' && (
           <div style={{ padding: '14px 20px', borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#999', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Call info</div>
-            <div style={{ fontSize: 12, color: '#555', lineHeight: 1.8 }}>
-              <div>Caller ID: <span style={{ fontFamily: 'monospace' }}>{scenario.extra_data.caller_id}</span></div>
-              <div>Claims to be: {scenario.extra_data.claimed_organization}</div>
-              <div>Tactics: {scenario.extra_data.tactics_used?.join(', ')}</div>
-              <div>Info requested: {scenario.extra_data.info_requested?.join(', ')}</div>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              {/* Audio play button */}
+              <VishingPlayer transcript={scenario.body} callerName={scenario.extra_data.caller_name || scenario.subject} />
+              <div style={{ fontSize: 12, color: '#555', lineHeight: 1.8, flex: 1 }}>
+                <div>Caller ID: <span style={{ fontFamily: 'monospace' }}>{scenario.extra_data.caller_id}</span></div>
+                <div>Claims to be: <strong>{scenario.extra_data.claimed_organization}</strong></div>
+                {scenario.extra_data.caller_name && <div>Name given: {scenario.extra_data.caller_name}</div>}
+                <div>Tactics: {scenario.extra_data.tactics_used?.join(', ')}</div>
+                <div>Info requested: <span style={{ color: '#c62828' }}>{scenario.extra_data.info_requested?.join(', ')}</span></div>
+                {scenario.extra_data.call_duration && <div>Duration: {scenario.extra_data.call_duration}</div>}
+              </div>
             </div>
           </div>
         )}
@@ -465,5 +488,93 @@ function StatsPage() {
       )}
       {stats.total === 0 && <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: '48px 24px', textAlign: 'center' }}><p style={{ color: '#999' }}>Complete some scenarios to see stats</p></div>}
     </>
+  );
+}
+
+// ── QR CODE GENERATOR ──
+function QRCode({ url }) {
+  const size = 100;
+  const grid = 21;
+  const cellSize = size / grid;
+  const hash = (str, i) => { let h = i * 31; for (let c = 0; c < str.length; c++) h = ((h << 5) - h + str.charCodeAt(c)) | 0; return h; };
+  const cells = [];
+  const addFinder = (sx, sy) => {
+    for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
+      const isBorder = x === 0 || x === 6 || y === 0 || y === 6;
+      const isInner = x >= 2 && x <= 4 && y >= 2 && y <= 4;
+      if (isBorder || isInner) cells.push({ x: sx + x, y: sy + y });
+    }
+  };
+  addFinder(0, 0); addFinder(14, 0); addFinder(0, 14);
+  for (let y = 0; y < grid; y++) {
+    for (let x = 0; x < grid; x++) {
+      if ((x < 8 && y < 8) || (x > 12 && y < 8) || (x < 8 && y > 12)) continue;
+      if (x === 6 || y === 6) { if ((x + y) % 2 === 0) cells.push({ x, y }); continue; }
+      if (Math.abs(hash(url, x * grid + y)) % 3 !== 0) cells.push({ x, y });
+    }
+  }
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ border: '2px solid #eee', borderRadius: 6, background: '#fff' }}>
+      {cells.map((c, i) => <rect key={i} x={c.x * cellSize} y={c.y * cellSize} width={cellSize} height={cellSize} fill="#1a1a1a" />)}
+    </svg>
+  );
+}
+
+// ── VISHING AUDIO PLAYER ──
+function VishingPlayer({ transcript, callerName }) {
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const intervalRef = useRef(null);
+
+  const extractCallerLines = (text) => text.split('\n').filter(l => l.trim().startsWith('Caller:')).map(l => l.replace('Caller:', '').trim()).join('. ');
+
+  const play = () => {
+    if (playing) {
+      window.speechSynthesis.cancel();
+      setPlaying(false); setProgress(0);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      return;
+    }
+    const callerText = extractCallerLines(transcript);
+    if (!callerText) return;
+
+    const utterance = new SpeechSynthesisUtterance(callerText);
+    utterance.rate = 0.9; utterance.pitch = 0.8;
+    const voices = window.speechSynthesis.getVoices();
+    const deepVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Daniel') || v.name.includes('David'));
+    if (deepVoice) utterance.voice = deepVoice;
+
+    utterance.onend = () => { setPlaying(false); setProgress(100); if (intervalRef.current) clearInterval(intervalRef.current); };
+
+    setPlaying(true); setProgress(0);
+    const words = callerText.split(' ').length;
+    const dur = (words / 2.5) * 1000;
+    const step = 100 / (dur / 200);
+    intervalRef.current = setInterval(() => {
+      setProgress(p => { if (p >= 99) { clearInterval(intervalRef.current); return 100; } return p + step; });
+    }, 200);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  return (
+    <div style={{ background: '#1a1a1a', borderRadius: 12, padding: 14, minWidth: 180, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <button onClick={play} style={{
+          width: 36, height: 36, borderRadius: '50%', border: 'none',
+          background: playing ? '#c62828' : '#fff', color: playing ? '#fff' : '#1a1a1a',
+          fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+        }}>{playing ? '■' : '▶'}</button>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>Incoming call</div>
+          <div style={{ fontSize: 10, color: '#999' }}>{callerName}</div>
+        </div>
+      </div>
+      <div style={{ height: 3, background: '#333', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${progress}%`, background: '#4ade80', borderRadius: 2, transition: 'width 0.2s' }} />
+      </div>
+      <div style={{ fontSize: 9, color: '#666', marginTop: 6, textAlign: 'center' }}>
+        {playing ? 'Playing caller audio...' : progress > 0 ? 'Call ended' : 'Click play to hear the call'}
+      </div>
+    </div>
   );
 }

@@ -145,7 +145,6 @@ def get_stats(db: Session = Depends(get_db), user: User = Depends(get_current_us
 async def get_threat_feed(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
     if len(threats) < 5:
-        # Generate some threat intel using AI if we don't have enough
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 import os
@@ -153,18 +152,27 @@ async def get_threat_feed(db: Session = Depends(get_db), user: User = Depends(ge
                 if api_key and api_key != "your-anthropic-api-key-here":
                     resp = await client.post("https://api.anthropic.com/v1/messages",
                         headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"},
-                        json={"model":"claude-sonnet-4-20250514","max_tokens":1500,
-                            "messages":[{"role":"user","content":"Generate 8 realistic recent cybersecurity threat alerts as JSON array. Each: {\"title\":\"...\",\"severity\":\"Critical|High|Medium|Low\",\"category\":\"Phishing|Ransomware|Data Breach|Vulnerability|Malware|Social Engineering\",\"summary\":\"1-2 sentence description\",\"source\":\"news source name\"}. Make them sound like real recent threats. JSON only, no markdown."}]})
+                        json={"model":"claude-sonnet-4-20250514","max_tokens":2000,
+                            "tools":[{"type":"web_search_20250305","name":"web_search"}],
+                            "messages":[{"role":"user","content":"Search the web for the latest cybersecurity threats, data breaches, vulnerabilities, and phishing campaigns from the past 30 days. Then provide the results as a JSON array with 10 entries. Each entry: {\"title\":\"exact headline\",\"severity\":\"Critical|High|Medium|Low\",\"category\":\"Phishing|Ransomware|Data Breach|Vulnerability|Malware|Social Engineering|Zero-Day|Supply Chain\",\"summary\":\"2-3 sentence factual summary\",\"source\":\"publication name\",\"date\":\"YYYY-MM-DD\"}. Return ONLY the JSON array, no markdown."}]})
                     data = resp.json()
-                    text = "".join(b["text"] for b in data.get("content",[]) if b.get("type")=="text")
-                    items = json.loads(text.replace("```json","").replace("```","").strip())
-                    for item in items:
-                        t = ThreatFeed(title=item["title"], severity=item.get("severity","Medium"),
-                            category=item.get("category",""), summary=item.get("summary",""),
-                            source=item.get("source",""))
-                        db.add(t)
-                    db.commit()
-                    threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
+                    text = ""
+                    for b in data.get("content", []):
+                        if b.get("type") == "text":
+                            text += b["text"]
+                    clean = text.replace("```json","").replace("```","").strip()
+                    # Find JSON array in the response
+                    start = clean.find("[")
+                    end = clean.rfind("]") + 1
+                    if start >= 0 and end > start:
+                        items = json.loads(clean[start:end])
+                        for item in items:
+                            t = ThreatFeed(title=item.get("title",""), severity=item.get("severity","Medium"),
+                                category=item.get("category",""), summary=item.get("summary",""),
+                                source=item.get("source",""), published_at=item.get("date",""))
+                            db.add(t)
+                        db.commit()
+                        threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
         except Exception as e:
             print(f"Threat feed generation failed: {e}")
 

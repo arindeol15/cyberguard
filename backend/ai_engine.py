@@ -11,59 +11,66 @@ PROMPTS = {
     "email": """Generate a {difficulty}-difficulty phishing EMAIL scenario #{seed}.
 Industry: {industry}. Theme: {theme}.
 
+CRITICAL: Generate a COMPLETELY UNIQUE scenario. Do NOT use Amazon, PayPal, FedEx, Google, Microsoft, or any commonly used phishing examples. Use CREATIVE and UNUSUAL companies, services, or contexts from the {industry} industry.
+
 Respond ONLY with JSON (no markdown):
-{{"type":"attack_type","from":"fake@domain.com","sender":"Display Name","subject":"Subject","body":"Full email 150+ words","options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+{{"type":"attack_type","from":"fake@domain.com","sender":"Display Name","subject":"Subject","body":"Full email 150+ words with specific names, dates, amounts","options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
 
 The correct answer must be: {archetype}
-Options must be UNIQUE to this email. Never use generic labels. correct_id must be "{correct_pos}".""",
+Options must be UNIQUE to this email. Never use generic labels. correct_id must be "{correct_pos}".
+Easy = obvious typos, fake domains. Medium = convincing with detectable issues. Hard = very sophisticated.""",
 
     "website": """Generate a {difficulty}-difficulty FAKE WEBSITE detection scenario #{seed}.
-Industry: {industry}.
+Industry: {industry}. The fake website is from the {industry} sector.
 
-Create a scenario where the user must identify a FAKE/cloned website. Include the fake URL and what the real URL should be.
+CRITICAL: Do NOT use Amazon, Google, PayPal, Chase, or Microsoft. Create a fake version of a LESS COMMON but real-sounding {industry} company website. Be creative — use regional banks, niche services, healthcare portals, university systems, etc.
+
+Describe what the CLONED fake website looks like in detail — page layout, colors, forms, buttons, images, and what's slightly wrong.
 
 Respond ONLY with JSON (no markdown):
-{{"type":"fake_website","subject":"Website name being spoofed","body":"Description of what the user sees on this fake website (150+ words, describe the page layout, what it asks for, visual details)","extra_data":{{"fake_url":"https://amaz0n-login.com/signin","real_url":"https://amazon.com/signin","ssl_valid":false,"domain_age":"2 days","visual_differences":["Logo is slightly blurry","Footer links are broken","Address bar shows http not https","Copyright year is wrong"]}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+{{"type":"fake_website","subject":"Name of the website being spoofed","body":"Detailed description of the fake website (200+ words). Describe the page: header, navigation, main content area, forms, footer. What does it ask users to do? What looks real and what's off?","extra_data":{{"fake_url":"https://spoofed-domain.com/page","real_url":"https://real-domain.com/page","ssl_valid":false,"domain_age":"3 days","page_title":"Title shown in browser tab","visual_differences":["Specific visual issue 1","Specific visual issue 2","Specific visual issue 3","Specific visual issue 4"]}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
 
-Easy = obvious fake URL (g00gle.com), broken images, spelling errors
-Medium = convincing look but detectable issues in URL, SSL, small visual differences
-Hard = nearly identical clone, only subtle URL difference and minor visual clues""",
+Easy = obvious fake URL (misspelling), broken images, spelling errors in content
+Medium = convincing look, valid SSL, but subtle URL difference and a few visual clues
+Hard = nearly identical clone, only very subtle differences in URL and minor visual details""",
 
     "qr": """Generate a {difficulty}-difficulty QR CODE attack scenario #{seed}.
-Location context: {location}.
+Location: {location}.
 
-Create a scenario where user encounters a QR code in a real-world situation and must decide if it's safe.
+CRITICAL: Create a UNIQUE and CREATIVE real-world situation where someone encounters a suspicious QR code. Think beyond restaurants and WiFi — consider parking meters, event tickets, charity donation boxes, product packaging, bus stops, apartment notice boards, gym equipment, vending machines, etc.
 
 Respond ONLY with JSON (no markdown):
-{{"type":"qr_attack","subject":"Where/how user found the QR code","body":"Full description of the situation (150+ words). Where is the QR code? What does it claim to do? What does the user see after scanning?","extra_data":{{"location":"{location}","claimed_purpose":"Free WiFi login / Menu / Payment / Discount coupon","actual_destination":"https://malicious-site.com/steal-data","qr_placement":"Sticker placed over original QR on restaurant menu","redirect_chain":["https://short.link/x7k","https://malicious-site.com/steal-data"]}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+{{"type":"qr_attack","subject":"Short title of where/how QR was found","body":"Full story description (200+ words). Set the scene vividly. What does the QR code look like physically? Where exactly is it? What sign or instruction is near it? What happens step by step when scanned?","extra_data":{{"location":"{location}","claimed_purpose":"What the QR claims to do","actual_destination":"https://malicious-url.com/steal","qr_placement":"Physical description of how QR is placed","redirect_chain":["https://short.link/abc","https://malicious-url.com/steal"],"qr_url":"https://malicious-url.com/steal"}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
 
-Easy = obviously suspicious QR with clear warning signs
-Medium = plausible scenario but detectable if you look closely
-Hard = very convincing placement, hard to distinguish from legitimate""",
+Easy = obviously suspicious sticker, handwritten sign, clearly fake
+Medium = plausible but has detectable red flags on closer inspection
+Hard = professionally printed, matches surroundings, very hard to spot""",
 
     "vishing": """Generate a {difficulty}-difficulty VISHING (voice phishing) phone call scenario #{seed}.
 Caller pretends to be from: {industry}.
 
-Create a realistic phone call TRANSCRIPT between a scammer and a potential victim.
+CRITICAL: Create a UNIQUE phone scam scenario. Avoid generic "bank fraud department" calls. Think creatively: fake insurance claims, fake government audit, fake IT vendor, fake delivery service needing payment, fake HR calling about benefits, fake recruiter with job offer, fake utility company threatening disconnection, etc.
+
+Write the transcript so it reads like a real phone conversation with natural pauses, interruptions, and realistic dialogue.
 
 Respond ONLY with JSON (no markdown):
-{{"type":"vishing","subject":"Who the caller claims to be","body":"Full phone call transcript (200+ words). Format as:\\nCaller: ...\\nYou: ...\\nCaller: ...\\netc. The caller uses social engineering tactics.","extra_data":{{"caller_id":"Displayed caller ID (may be spoofed)","claimed_organization":"Bank / IRS / Tech Support / etc","tactics_used":["urgency","authority","fear","isolation"],"info_requested":["SSN","bank account","password","remote access"]}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+{{"type":"vishing","subject":"Who the caller claims to be (specific name and org)","body":"Full phone call transcript (250+ words). Format as:\\nCaller: ...\\nYou: ...\\nCaller: ...\\netc. Include the caller's name, their opening line, how they build trust, where they apply pressure, and what they ultimately want.","extra_data":{{"caller_id":"Displayed phone number (may be spoofed)","claimed_organization":"Specific organization name","caller_name":"The name the scammer gives","tactics_used":["list","of","tactics"],"info_requested":["list","of","info","they","want"],"call_duration":"Approximate duration"}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
 
-Easy = obvious pressure tactics, broken English, asks for password directly
-Medium = professional tone but asks for too much info, subtle pressure
-Hard = very convincing, uses real department names, knows some of your info""",
+Easy = obvious pressure, broken English, asks for passwords directly
+Medium = professional tone, knows some of your details, subtle pressure
+Hard = very convincing, uses real department names, creates a believable story""",
 
     "usb": """Generate a {difficulty}-difficulty USB DROP attack scenario #{seed}.
 Location: {location}.
 
-Create a scenario where the user finds a USB drive and must decide what to do.
+CRITICAL: Create a UNIQUE USB drop scenario. Be creative with the location, the USB appearance, and especially the LABEL. Think beyond "Employee Salaries" — consider project files, client data, wedding photos, game saves, firmware updates, security patches, interview recordings, etc.
 
 Respond ONLY with JSON (no markdown):
-{{"type":"usb_drop","subject":"USB label/appearance description","body":"Full scenario description (150+ words). Where was the USB found? What does it look like? What label is on it? If plugged in, what files appear? What happens next?","extra_data":{{"found_location":"{location}","usb_label":"Label written on the USB","usb_appearance":"Physical description of the USB drive","files_if_opened":["Salaries_Q4_2024.xlsx","README.txt","Photos/"],"hidden_payload":"Autorun malware that installs keylogger","social_engineering":"Label designed to trigger curiosity"}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
+{{"type":"usb_drop","subject":"USB label and appearance (short)","body":"Full scenario (200+ words). Describe: exactly where you find it, what it looks like physically (color, brand, condition, label), the context (time of day, who else is around), and if plugged in — what files appear and what happens.","extra_data":{{"found_location":"{location}","usb_label":"Exact text on the USB label","usb_appearance":"Detailed physical description","files_if_opened":["file1.ext","file2.ext","file3.ext"],"hidden_payload":"What the malware actually does","social_engineering":"Why the label is designed to tempt you"}},"options":[{{"id":"opt1","label":"3-6 words","desc":"under 10 words"}},{{"id":"opt2","label":"...","desc":"..."}},{{"id":"opt3","label":"...","desc":"..."}},{{"id":"opt4","label":"...","desc":"..."}}],"correct_id":"{correct_pos}","flags":["flag1","flag2","flag3","flag4"]}}
 
-Easy = suspicious USB in obvious location with too-good-to-be-true label
-Medium = found in office area, looks like a colleague lost it
-Hard = branded company USB with legitimate-looking label found in lobby""",
+Easy = suspicious USB with too-tempting label in obvious spot
+Medium = looks like someone dropped it accidentally in work area
+Hard = branded company USB that looks completely legitimate""",
 }
 
 INDUSTRIES = ["banking","healthcare","e-commerce","tech company","government","university","cloud service","social media","shipping","cryptocurrency","streaming","airline","insurance","telecom","real estate"]
