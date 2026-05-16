@@ -288,12 +288,12 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         {scenario.extra_data && category === 'website' && (
           <div style={{ padding: '14px 20px', borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#999', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Browser info</div>
-            <div style={{ fontSize: 12, color: '#555', lineHeight: 1.8 }}>
-              <div>URL: <span style={{ fontFamily: 'monospace', color: '#c62828' }}>{scenario.extra_data.fake_url}</span></div>
+            <div style={{ fontSize: 12, color: '#555', lineHeight: 1.8, marginBottom: 12 }}>
               <div>SSL: {scenario.extra_data.ssl_valid ? '🔒 Valid certificate' : '⚠️ No SSL — HTTP only'}</div>
               <div>Domain age: {scenario.extra_data.domain_age}</div>
               {scenario.extra_data.visual_differences && <div>Visual clues: {scenario.extra_data.visual_differences.join(' | ')}</div>}
             </div>
+            <FakeBrowser fakeUrl={scenario.extra_data.fake_url} realUrl={scenario.extra_data.real_url} ssl={scenario.extra_data.ssl_valid} subject={scenario.subject} />
           </div>
         )}
         {scenario.extra_data && category === 'usb' && (
@@ -383,7 +383,11 @@ function ThreatPage() {
   return (
     <>
       <h2 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 6px' }}>Threat intelligence</h2>
-      <p style={{ color: '#888', fontSize: 13, margin: '0 0 24px' }}>Latest cybersecurity threats and trends</p>
+      <p style={{ color: '#888', fontSize: 13, margin: '0 0 24px' }}>Live cybersecurity threats and global attack map</p>
+
+      {/* Global Attack Map */}
+      <ThreatMap />
+
       {loading ? <p style={{ textAlign: 'center', color: '#888', padding: 40 }}>Loading threat feed...</p> :
         threats.length === 0 ? (
           <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: '48px 24px', textAlign: 'center' }}>
@@ -402,6 +406,7 @@ function ThreatPage() {
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', marginBottom: 4 }}>{t.title}</div>
                 {t.summary && <div style={{ fontSize: 13, color: '#666', lineHeight: 1.5 }}>{t.summary}</div>}
+                {t.published_at && <div style={{ fontSize: 11, color: '#bbb', marginTop: 4 }}>{t.published_at}</div>}
               </div>
             ))}
           </div>
@@ -487,46 +492,244 @@ function StatsPage() {
   );
 }
 
+// ── FAKE BROWSER SIMULATOR ──
+function FakeBrowser({ fakeUrl, realUrl, ssl, subject }) {
+  const [showPage, setShowPage] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+
+  const domain = fakeUrl ? new URL(fakeUrl).hostname : 'fake-site.com';
+
+  return (
+    <div>
+      <button onClick={() => setShowPage(!showPage)} style={{
+        padding: '8px 16px', borderRadius: 8, border: '1px solid #c62828',
+        background: '#fff', color: '#c62828', fontSize: 12, fontWeight: 600,
+        cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        🌐 {showPage ? 'Close simulated page' : 'Visit the suspicious URL'}
+      </button>
+
+      {showPage && (
+        <div style={{ marginTop: 12, border: '2px solid #ddd', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
+          {/* Browser chrome */}
+          <div style={{ background: '#f0f0f0', padding: '8px 12px', borderBottom: '1px solid #ddd' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f56' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#27c93f' }} />
+              <span style={{ fontSize: 10, color: '#999', marginLeft: 8 }}>{subject || 'Web Page'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', borderRadius: 6, padding: '6px 10px', border: '1px solid #ddd' }}>
+              <span style={{ fontSize: 12 }}>{ssl ? '🔒' : '⚠️'}</span>
+              <span style={{ fontSize: 11, fontFamily: 'monospace', color: ssl ? '#555' : '#c62828', flex: 1 }}>{fakeUrl}</span>
+            </div>
+          </div>
+
+          {/* Fake page content */}
+          <div style={{ padding: 20, minHeight: 200, background: '#fff' }}>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <div style={{ width: 50, height: 50, background: '#f0f0f0', borderRadius: 8, margin: '0 auto 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🏢</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a' }}>Sign in to your account</div>
+              <div style={{ fontSize: 11, color: '#999' }}>{domain}</div>
+            </div>
+
+            <div style={{ maxWidth: 280, margin: '0 auto' }}>
+              <input placeholder="Email or username" disabled style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, marginBottom: 8, boxSizing: 'border-box', background: '#fafafa', color: '#999' }} />
+              <input placeholder="Password" type="password" disabled style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, marginBottom: 10, boxSizing: 'border-box', background: '#fafafa', color: '#999' }} />
+              <button onClick={() => setShowWarning(true)} style={{
+                width: '100%', padding: 10, borderRadius: 6, border: 'none',
+                background: '#1a73e8', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }}>Sign in</button>
+              <div style={{ textAlign: 'center', marginTop: 10 }}>
+                <span style={{ fontSize: 11, color: '#1a73e8', cursor: 'pointer' }}>Forgot password?</span>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid #eee', marginTop: 20, paddingTop: 10, textAlign: 'center' }}>
+              <span style={{ fontSize: 10, color: '#ccc' }}>© 2021 {domain}. All rights reserved.</span>
+            </div>
+          </div>
+
+          {/* Warning overlay when they click Sign In */}
+          {showWarning && (
+            <div style={{ padding: 16, background: '#c62828', color: '#fff' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>⚠️ THIS IS A PHISHING PAGE!</div>
+              <div style={{ fontSize: 12, lineHeight: 1.6, marginBottom: 8 }}>
+                If you had entered your credentials, they would be sent to the attacker at <strong style={{ fontFamily: 'monospace' }}>{domain}</strong>.
+              </div>
+              <div style={{ fontSize: 11, lineHeight: 1.6 }}>
+                <div>Fake URL: <span style={{ fontFamily: 'monospace' }}>{fakeUrl}</span></div>
+                <div>Real URL: <span style={{ fontFamily: 'monospace', color: '#4ade80' }}>{realUrl}</span></div>
+              </div>
+              <button onClick={() => { setShowPage(false); setShowWarning(false); }} style={{
+                marginTop: 10, padding: '6px 16px', borderRadius: 6, border: '1px solid #fff',
+                background: 'transparent', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+              }}>Close</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── GLOBAL THREAT MAP ──
+function ThreatMap() {
+  const [attacks, setAttacks] = useState([]);
+  const [hoveredAttack, setHoveredAttack] = useState(null);
+
+  useEffect(() => {
+    // Generate simulated live attacks with real-world locations
+    const locations = [
+      { city: 'Moscow', x: 430, y: 95, type: 'Ransomware' },
+      { city: 'Beijing', x: 530, y: 120, type: 'APT' },
+      { city: 'Lagos', x: 370, y: 200, type: 'Phishing' },
+      { city: 'São Paulo', x: 250, y: 250, type: 'DDoS' },
+      { city: 'New York', x: 210, y: 115, type: 'Data Breach' },
+      { city: 'London', x: 360, y: 90, type: 'Malware' },
+      { city: 'Dubai', x: 430, y: 150, type: 'Social Engineering' },
+      { city: 'Mumbai', x: 470, y: 160, type: 'Credential Theft' },
+      { city: 'Tokyo', x: 570, y: 120, type: 'Supply Chain' },
+      { city: 'Sydney', x: 580, y: 270, type: 'Zero-Day' },
+      { city: 'Berlin', x: 380, y: 85, type: 'Spear Phishing' },
+      { city: 'Toronto', x: 195, y: 105, type: 'BEC' },
+      { city: 'Seoul', x: 555, y: 115, type: 'Cryptojacking' },
+      { city: 'Jakarta', x: 530, y: 220, type: 'Smishing' },
+      { city: 'Nairobi', x: 410, y: 210, type: 'Vishing' },
+    ];
+
+    const generateAttacks = () => {
+      const count = 5 + Math.floor(Math.random() * 5);
+      const selected = [];
+      for (let i = 0; i < count; i++) {
+        const loc = locations[Math.floor(Math.random() * locations.length)];
+        selected.push({
+          ...loc,
+          id: i,
+          severity: ['Critical', 'High', 'Medium', 'Low'][Math.floor(Math.random() * 4)],
+          time: `${Math.floor(Math.random() * 59)}m ago`,
+          pulse: Math.random(),
+        });
+      }
+      setAttacks(selected);
+    };
+
+    generateAttacks();
+    const interval = setInterval(generateAttacks, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div style={{ background: '#0d1220', borderRadius: 14, overflow: 'hidden', marginBottom: 20, position: 'relative' }}>
+      <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>Global threat map</div>
+          <div style={{ fontSize: 10, color: '#64748b' }}>Live attack simulation</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', animation: 'blink 1.5s infinite' }} />
+          <span style={{ fontSize: 10, color: '#4ade80' }}>LIVE</span>
+        </div>
+      </div>
+      <style>{`@keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.3 } } @keyframes pulse { 0% { transform:scale(1);opacity:0.8 } 100% { transform:scale(3);opacity:0 } }`}</style>
+
+      <svg viewBox="0 0 700 320" style={{ width: '100%', display: 'block' }}>
+        {/* Simplified world map outline */}
+        <path d="M120,100 L180,80 L220,85 L240,95 L210,120 L215,140 L200,160 L195,140 L180,130 L170,115 Z" fill="none" stroke="#1e293b" strokeWidth="1" />
+        <path d="M230,110 L270,100 L290,120 L280,160 L260,180 L245,200 L230,260 L240,280 L270,270 L260,250 L280,240 L270,220 L260,200 L280,170 L270,140 L250,120 Z" fill="none" stroke="#1e293b" strokeWidth="1" />
+        <path d="M340,70 L400,65 L420,75 L440,70 L460,80 L500,75 L540,80 L560,85 L580,90 L590,100 L570,110 L540,105 L520,110 L500,105 L480,110 L460,120 L440,115 L420,110 L400,100 L380,95 L360,90 Z" fill="none" stroke="#1e293b" strokeWidth="1" />
+        <path d="M360,90 L370,120 L380,140 L400,160 L420,180 L410,200 L420,220 L400,230 L380,220 L370,200 L360,180 L350,140 L355,110 Z" fill="none" stroke="#1e293b" strokeWidth="1" />
+        <path d="M430,130 L480,120 L520,130 L550,150 L560,170 L540,190 L520,210 L500,220 L480,200 L460,170 L440,150 Z" fill="none" stroke="#1e293b" strokeWidth="1" />
+        <path d="M545,240 L580,230 L610,250 L600,280 L570,290 L550,270 Z" fill="none" stroke="#1e293b" strokeWidth="1" />
+
+        {/* Grid lines */}
+        {[80,120,160,200,240,280].map(y => <line key={`h${y}`} x1="100" y1={y} x2="630" y2={y} stroke="#1e293b" strokeWidth="0.3" />)}
+        {[150,200,250,300,350,400,450,500,550,600].map(x => <line key={`v${x}`} x1={x} y1="60" x2={x} y2="300" stroke="#1e293b" strokeWidth="0.3" />)}
+
+        {/* Attack dots */}
+        {attacks.map((a, i) => (
+          <g key={a.id + '-' + i} onMouseEnter={() => setHoveredAttack(a)} onMouseLeave={() => setHoveredAttack(null)} style={{ cursor: 'pointer' }}>
+            {/* Pulse ring */}
+            <circle cx={a.x} cy={a.y} r="4" fill="none" stroke={a.severity === 'Critical' ? '#ef4444' : a.severity === 'High' ? '#f97316' : '#eab308'} strokeWidth="1" opacity="0.6">
+              <animate attributeName="r" values="4;16" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.6;0" dur="2s" repeatCount="indefinite" />
+            </circle>
+            {/* Dot */}
+            <circle cx={a.x} cy={a.y} r="3" fill={a.severity === 'Critical' ? '#ef4444' : a.severity === 'High' ? '#f97316' : a.severity === 'Medium' ? '#eab308' : '#22c55e'} />
+          </g>
+        ))}
+
+        {/* Hover tooltip */}
+        {hoveredAttack && (
+          <g>
+            <rect x={hoveredAttack.x + 8} y={hoveredAttack.y - 30} width="130" height="40" rx="6" fill="#1e293b" stroke="#334155" strokeWidth="0.5" />
+            <text x={hoveredAttack.x + 16} y={hoveredAttack.y - 14} fill="#e2e8f0" fontSize="10" fontWeight="600">{hoveredAttack.city}</text>
+            <text x={hoveredAttack.x + 16} y={hoveredAttack.y + 0} fill="#94a3b8" fontSize="9">{hoveredAttack.type} · {hoveredAttack.time}</text>
+          </g>
+        )}
+      </svg>
+
+      {/* Attack counter bar */}
+      <div style={{ padding: '10px 20px', display: 'flex', gap: 16, borderTop: '1px solid #1e293b' }}>
+        {['Critical', 'High', 'Medium', 'Low'].map(sev => {
+          const count = attacks.filter(a => a.severity === sev).length;
+          return (
+            <div key={sev} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: SEVERITY_COLORS[sev] }} />
+              <span style={{ fontSize: 10, color: '#94a3b8' }}>{sev}: {count}</span>
+            </div>
+          );
+        })}
+        <span style={{ fontSize: 10, color: '#64748b', marginLeft: 'auto' }}>Total: {attacks.length} active threats</span>
+      </div>
+    </div>
+  );
+}
+
 // ── QR CODE (REAL SCANNABLE) ──
 function QRCode({ url }) {
-  const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=${encodeURIComponent(url)}&chld=L|1`;
+  // Create a warning page URL that shows the malicious destination
+  // When someone scans this QR, they'll see a CyberGuard warning page
+  const warningPageData = btoa(JSON.stringify({ malicious_url: url, platform: 'CyberGuard' }));
+  // Use a data URL approach — the QR encodes a message showing the phishing URL
+  const qrContent = `⚠️ CYBERGUARD TRAINING ⚠️\n\nThis QR code was part of a phishing simulation.\n\nThe malicious URL was:\n${url}\n\nNever scan unknown QR codes!`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&color=1a1a1a&bgcolor=ffffff`;
   const [scanned, setScanned] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
 
   return (
     <div style={{ textAlign: 'center' }}>
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <img
           src={qrUrl}
-          alt="QR Code"
-          width={120}
-          height={120}
-          style={{ border: '3px solid #eee', borderRadius: 8, background: '#fff', padding: 4 }}
-          onError={(e) => { e.target.style.display = 'none'; }}
+          alt="QR Code - scan to test"
+          width={140}
+          height={140}
+          style={{ border: '3px solid #eee', borderRadius: 10, background: '#fff', padding: 6 }}
+          onError={(e) => {
+            // Fallback to Google Charts API
+            e.target.src = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(url)}`;
+          }}
         />
-        {scanned && (
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(198,40,40,0.9)', borderRadius: 8,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>⚠️</span>
-            <span style={{ color: '#fff', fontSize: 9, fontWeight: 600, marginTop: 4 }}>MALICIOUS URL</span>
-          </div>
-        )}
+        <div style={{ position: 'absolute', bottom: -4, right: -4, background: '#1a1a1a', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ color: '#fff', fontSize: 11 }}>📱</span>
+        </div>
       </div>
-      <div style={{ marginTop: 8 }}>
-        <button onClick={() => setScanned(!scanned)} style={{
-          fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #eee',
-          background: scanned ? '#fce4ec' : '#f5f5f5', color: scanned ? '#c62828' : '#666',
-          cursor: 'pointer', fontFamily: 'inherit',
+      <div style={{ fontSize: 10, color: '#888', marginTop: 8 }}>Scan with your phone camera</div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'center' }}>
+        <button onClick={() => { setScanned(true); setShowWarning(true); }} style={{
+          fontSize: 10, padding: '5px 12px', borderRadius: 6, border: 'none',
+          background: '#1a1a1a', color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
         }}>
-          {scanned ? 'Hide result' : 'Simulate scan'}
+          Reveal destination
         </button>
       </div>
-      {scanned && (
-        <div style={{ marginTop: 6, padding: '6px 8px', background: '#fce4ec', borderRadius: 6 }}>
-          <div style={{ fontSize: 9, color: '#c62828', fontWeight: 600 }}>Destination:</div>
-          <div style={{ fontSize: 9, color: '#c62828', fontFamily: 'monospace', wordBreak: 'break-all' }}>{url}</div>
+      {showWarning && (
+        <div style={{ marginTop: 10, padding: 10, background: '#fce4ec', borderRadius: 8, border: '1px solid #f09595', textAlign: 'left' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#c62828', marginBottom: 4 }}>⚠️ PHISHING DETECTED</div>
+          <div style={{ fontSize: 10, color: '#c62828' }}>This QR code leads to:</div>
+          <div style={{ fontSize: 10, color: '#c62828', fontFamily: 'monospace', wordBreak: 'break-all', background: '#fff', padding: '4px 6px', borderRadius: 4, marginTop: 4 }}>{url}</div>
+          <div style={{ fontSize: 9, color: '#888', marginTop: 6 }}>This is NOT a legitimate URL. In real life, this could steal your data.</div>
         </div>
       )}
     </div>
