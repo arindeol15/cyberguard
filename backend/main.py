@@ -21,6 +21,34 @@ DEFAULT_OPTIONS = [
     {"id": "comply", "label": "Follow instructions", "desc": "Do what it says"},
 ]
 
+def shuffle_options(options, correct_action):
+    """Shuffle option positions and remap IDs so correct answer is at a random position every time."""
+    if not options or len(options) < 2:
+        return options, correct_action
+
+    # Find the correct option's content
+    correct_opt = None
+    for opt in options:
+        if opt["id"] == correct_action:
+            correct_opt = opt
+            break
+    if not correct_opt:
+        return options, correct_action
+
+    # Shuffle the options
+    shuffled = list(options)
+    random.shuffle(shuffled)
+
+    # Reassign IDs (opt1, opt2, opt3, opt4) based on new positions
+    new_correct = correct_action
+    for i, opt in enumerate(shuffled):
+        new_id = f"opt{i+1}"
+        if opt["label"] == correct_opt["label"] and opt["desc"] == correct_opt["desc"]:
+            new_correct = new_id
+        shuffled[i] = {"id": new_id, "label": opt["label"], "desc": opt["desc"]}
+
+    return shuffled, new_correct
+
 @app.on_event("startup")
 def startup():
     init_db()
@@ -66,12 +94,15 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
         ai_result = await generate_ai_scenario(category, difficulty, used_types, used_subjects)
         if ai_result:
             options = ai_result.get("options", DEFAULT_OPTIONS)
+            correct_id = ai_result.get("correct_id", "opt1")
+            # Shuffle options and remap correct answer
+            options, correct_id = shuffle_options(options, correct_id)
             extra = ai_result.get("extra_data", None)
             scenario = Scenario(
                 category=category, type=ai_result.get("type", "Phishing"), difficulty=difficulty,
                 sender_email=ai_result.get("from"), sender_name=ai_result.get("sender"),
                 subject=ai_result.get("subject", "No subject"), body=ai_result.get("body", ""),
-                correct_action=ai_result.get("correct_id", "opt1"),
+                correct_action=correct_id,
                 red_flags=json.dumps(ai_result.get("flags", [])),
                 options=json.dumps(options),
                 extra_data=json.dumps(extra) if extra else None,
@@ -95,8 +126,25 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
 
     s = random.choice(unseen)
     opts = json.loads(s.options) if s.options else DEFAULT_OPTIONS
+    correct = s.correct_action
+    # Shuffle options and remap correct answer
+    opts, correct = shuffle_options(opts, correct)
     extra = json.loads(s.extra_data) if s.extra_data else None
-    return {"id": s.id, "category": s.category, "type": s.type, "difficulty": s.difficulty,
+
+    # Create a new scenario record with shuffled options so correct_action matches
+    shuffled_scenario = Scenario(
+        category=s.category, type=s.type, difficulty=s.difficulty,
+        sender_email=s.sender_email, sender_name=s.sender_name,
+        subject=s.subject, body=s.body,
+        correct_action=correct,
+        red_flags=s.red_flags,
+        options=json.dumps(opts),
+        extra_data=s.extra_data,
+        is_ai_generated=False,
+    )
+    db.add(shuffled_scenario); db.commit(); db.refresh(shuffled_scenario)
+
+    return {"id": shuffled_scenario.id, "category": s.category, "type": s.type, "difficulty": s.difficulty,
         "sender_email": s.sender_email, "sender_name": s.sender_name,
         "subject": s.subject, "body": s.body, "options": opts, "extra_data": extra}
 
@@ -104,6 +152,18 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
 def submit_response(req: SubmitRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     scenario = db.query(Scenario).filter(Scenario.id == req.scenario_id).first()
     if not scenario: raise HTTPException(404, "Scenario not found")
+    is_correct = req.action == scenario.correct_action
+    points = POINTS.get(scenario.difficulty, 10) if is_correct else 0
+    response = Response(user_id=user.id, scenario_id=scenario.id, action=req.action,
+        is_correct=is_correct, points_earned=points, time_taken=req.time_taken)
+    db.add(response)
+    user.total_scenarios += 1; user.score += points
+    if is_correct: user.correct_answers += 1; user.streak += 1
+    else: user.streak = 0
+    db.commit(); db.refresh(user)
+    return SubmitResponse(correct=is_correct, correct_action=scenario.correct_action,
+        red_flags=json.loads(scenario.red_flags), points_earned=points,
+        new_score=user.score, new_streak=user.streak)
     is_correct = req.action == scenario.correct_action
     points = POINTS.get(scenario.difficulty, 10) if is_correct else 0
     response = Response(user_id=user.id, scenario_id=scenario.id, action=req.action,
@@ -146,35 +206,57 @@ async def get_threat_feed(db: Session = Depends(get_db), user: User = Depends(ge
     threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
     if len(threats) < 5:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                import os
-                api_key = os.getenv("ANTHROPIC_API_KEY", "")
-                if api_key and api_key != "your-anthropic-api-key-here":
-                    resp = await client.post("https://api.anthropic.com/v1/messages",
-                        headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"},
-                        json={"model":"claude-sonnet-4-20250514","max_tokens":2000,
-                            "tools":[{"type":"web_search_20250305","name":"web_search"}],
-                            "messages":[{"role":"user","content":"Search the web for the latest cybersecurity threats, data breaches, vulnerabilities, and phishing campaigns from the past 30 days. Then provide the results as a JSON array with 10 entries. Each entry: {\"title\":\"exact headline\",\"severity\":\"Critical|High|Medium|Low\",\"category\":\"Phishing|Ransomware|Data Breach|Vulnerability|Malware|Social Engineering|Zero-Day|Supply Chain\",\"summary\":\"2-3 sentence factual summary\",\"source\":\"publication name\",\"date\":\"YYYY-MM-DD\"}. Return ONLY the JSON array, no markdown."}]})
-                    data = resp.json()
-                    text = ""
-                    for b in data.get("content", []):
-                        if b.get("type") == "text":
-                            text += b["text"]
-                    clean = text.replace("```json","").replace("```","").strip()
-                    # Find JSON array in the response
-                    start = clean.find("[")
-                    end = clean.rfind("]") + 1
-                    if start >= 0 and end > start:
-                        items = json.loads(clean[start:end])
-                        for item in items:
-                            t = ThreatFeed(title=item.get("title",""), severity=item.get("severity","Medium"),
-                                category=item.get("category",""), summary=item.get("summary",""),
-                                source=item.get("source",""), published_at=item.get("date",""))
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                # Source 1: CISA Known Exploited Vulnerabilities (real government data)
+                try:
+                    cisa_resp = await client.get("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json")
+                    if cisa_resp.status_code == 200:
+                        cisa_data = cisa_resp.json()
+                        vulns = cisa_data.get("vulnerabilities", [])[-8:]  # latest 8
+                        for v in vulns:
+                            t = ThreatFeed(
+                                title=f"{v.get('cveID','')}: {v.get('vulnerabilityName','')}",
+                                severity="Critical" if "critical" in v.get('shortDescription','').lower() else "High",
+                                category="Vulnerability",
+                                summary=v.get('shortDescription','')[:300],
+                                source="CISA KEV",
+                                published_at=v.get('dateAdded',''),
+                            )
                             db.add(t)
-                        db.commit()
-                        threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
+                except Exception as e:
+                    print(f"CISA fetch failed: {e}")
+
+                # Source 2: NVD Recent CVEs (real vulnerability data)
+                try:
+                    nvd_resp = await client.get("https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=5")
+                    if nvd_resp.status_code == 200:
+                        nvd_data = nvd_resp.json()
+                        for item in nvd_data.get("vulnerabilities", [])[:5]:
+                            cve = item.get("cve", {})
+                            cve_id = cve.get("id", "")
+                            desc_list = cve.get("descriptions", [])
+                            desc = next((d["value"] for d in desc_list if d.get("lang") == "en"), "")
+                            metrics = cve.get("metrics", {})
+                            score = None
+                            for v in metrics.get("cvssMetricV31", []):
+                                score = v.get("cvssData", {}).get("baseScore")
+                            severity = "Critical" if score and score >= 9 else "High" if score and score >= 7 else "Medium" if score and score >= 4 else "Low"
+                            t = ThreatFeed(
+                                title=cve_id,
+                                severity=severity,
+                                category="CVE",
+                                summary=desc[:300] if desc else "No description available",
+                                source="NVD",
+                                published_at=cve.get("published","")[:10],
+                            )
+                            db.add(t)
+                except Exception as e:
+                    print(f"NVD fetch failed: {e}")
+
+                db.commit()
+                threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
         except Exception as e:
-            print(f"Threat feed generation failed: {e}")
+            print(f"Threat feed failed: {e}")
 
     return [{"id":t.id,"title":t.title,"severity":t.severity,"category":t.category,
         "summary":t.summary,"source":t.source,"published_at":t.published_at} for t in threats]

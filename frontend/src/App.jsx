@@ -179,17 +179,13 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [shuffled, setShuffled] = useState([]);
   const startTime = useRef(Date.now());
-
-  const shuffle = arr => { const c = [...arr]; for (let i = c.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [c[i], c[j]] = [c[j], c[i]]; } return c; };
 
   const load = async () => {
     setLoading(true); setSelected(null); setResult(null); startTime.current = Date.now();
     try {
       const s = await api.generateScenario(difficulty, useAi, category);
       setScenario(s);
-      setShuffled(shuffle(s.options || []));
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -360,7 +356,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: '#999', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>What would you do?</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {shuffled.map((a, i) => (
+          {(scenario.options || []).map((a, i) => (
             <button key={a.id} onClick={() => setSelected(a.id)} style={{
               padding: '12px 14px', borderRadius: 10, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
               border: selected === a.id ? '2px solid #1a1a1a' : '1.5px solid #eee',
@@ -491,32 +487,49 @@ function StatsPage() {
   );
 }
 
-// ── QR CODE GENERATOR ──
+// ── QR CODE (REAL SCANNABLE) ──
 function QRCode({ url }) {
-  const size = 100;
-  const grid = 21;
-  const cellSize = size / grid;
-  const hash = (str, i) => { let h = i * 31; for (let c = 0; c < str.length; c++) h = ((h << 5) - h + str.charCodeAt(c)) | 0; return h; };
-  const cells = [];
-  const addFinder = (sx, sy) => {
-    for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
-      const isBorder = x === 0 || x === 6 || y === 0 || y === 6;
-      const isInner = x >= 2 && x <= 4 && y >= 2 && y <= 4;
-      if (isBorder || isInner) cells.push({ x: sx + x, y: sy + y });
-    }
-  };
-  addFinder(0, 0); addFinder(14, 0); addFinder(0, 14);
-  for (let y = 0; y < grid; y++) {
-    for (let x = 0; x < grid; x++) {
-      if ((x < 8 && y < 8) || (x > 12 && y < 8) || (x < 8 && y > 12)) continue;
-      if (x === 6 || y === 6) { if ((x + y) % 2 === 0) cells.push({ x, y }); continue; }
-      if (Math.abs(hash(url, x * grid + y)) % 3 !== 0) cells.push({ x, y });
-    }
-  }
+  const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=${encodeURIComponent(url)}&chld=L|1`;
+  const [scanned, setScanned] = useState(false);
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ border: '2px solid #eee', borderRadius: 6, background: '#fff' }}>
-      {cells.map((c, i) => <rect key={i} x={c.x * cellSize} y={c.y * cellSize} width={cellSize} height={cellSize} fill="#1a1a1a" />)}
-    </svg>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <img
+          src={qrUrl}
+          alt="QR Code"
+          width={120}
+          height={120}
+          style={{ border: '3px solid #eee', borderRadius: 8, background: '#fff', padding: 4 }}
+          onError={(e) => { e.target.style.display = 'none'; }}
+        />
+        {scanned && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(198,40,40,0.9)', borderRadius: 8,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>⚠️</span>
+            <span style={{ color: '#fff', fontSize: 9, fontWeight: 600, marginTop: 4 }}>MALICIOUS URL</span>
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <button onClick={() => setScanned(!scanned)} style={{
+          fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #eee',
+          background: scanned ? '#fce4ec' : '#f5f5f5', color: scanned ? '#c62828' : '#666',
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          {scanned ? 'Hide result' : 'Simulate scan'}
+        </button>
+      </div>
+      {scanned && (
+        <div style={{ marginTop: 6, padding: '6px 8px', background: '#fce4ec', borderRadius: 6 }}>
+          <div style={{ fontSize: 9, color: '#c62828', fontWeight: 600 }}>Destination:</div>
+          <div style={{ fontSize: 9, color: '#c62828', fontFamily: 'monospace', wordBreak: 'break-all' }}>{url}</div>
+        </div>
+      )}
+    </div>
   );
 }
 
