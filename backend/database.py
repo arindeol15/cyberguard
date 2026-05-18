@@ -8,7 +8,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./cyberguard.db")
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine_args = {}
+if DATABASE_URL.startswith("sqlite"):
+    engine_args["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, **engine_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -29,7 +36,7 @@ class User(Base):
 class Scenario(Base):
     __tablename__ = "scenarios"
     id = Column(Integer, primary_key=True, index=True)
-    category = Column(String, default="email")  # email, website, qr, vishing, usb
+    category = Column(String, default="email")
     type = Column(String, nullable=False)
     difficulty = Column(String, nullable=False)
     sender_email = Column(String, nullable=True)
@@ -39,7 +46,7 @@ class Scenario(Base):
     correct_action = Column(String, nullable=False)
     red_flags = Column(String, nullable=False)
     options = Column(String, nullable=True)
-    extra_data = Column(String, nullable=True)  # JSON for category-specific data (URL, QR, transcript, USB)
+    extra_data = Column(String, nullable=True)  # JSON for category-specific simulation data
     is_ai_generated = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     responses = relationship("Response", back_populates="scenario")

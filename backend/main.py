@@ -20,6 +20,11 @@ DEFAULT_OPTIONS = [
     {"id": "ignore", "label": "Delete it", "desc": "Remove from inbox"},
     {"id": "comply", "label": "Follow instructions", "desc": "Do what it says"},
 ]
+CATEGORY_IDS = [
+    "email", "website", "qr", "vishing", "usb",
+    "chat", "attachment", "browser_exploit", "mfa", "cloud",
+    "insider", "wifi", "dns", "deepfake", "attack_chain",
+]
 
 def shuffle_options(options, correct_action):
     """Shuffle option positions and remap IDs so correct answer is at a random position every time."""
@@ -82,7 +87,7 @@ def get_me(user: User = Depends(get_current_user)):
 @app.post("/api/scenarios/generate")
 async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     difficulty = req.difficulty if req.difficulty in POINTS else "Medium"
-    category = req.category if req.category in ["email","website","qr","vishing","usb"] else "email"
+    category = req.category if req.category in CATEGORY_IDS else "email"
 
     user_responses = db.query(Response).filter(Response.user_id == user.id).all()
     used_ids = [r.scenario_id for r in user_responses]

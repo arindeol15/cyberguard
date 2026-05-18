@@ -28,7 +28,7 @@ class UserResponse(BaseModel):
 class GenerateRequest(BaseModel):
     difficulty: str = "Medium"
     use_ai: bool = True
-    category: str = "email"  # email, website, qr, vishing, usb
+    category: str = "email"
 
 class ActionOption(BaseModel):
     id: str

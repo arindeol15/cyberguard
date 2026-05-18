@@ -85,6 +85,84 @@ ARCHETYPES = [
     "Refuse, document, and report the incident",
 ]
 
+ADVANCED_MODULE_CONTEXT = {
+    "chat": {
+        "name": "internal Teams or Slack-style chat scam",
+        "examples": "fake HR requests, malicious shared documents, OTP requests, impersonation, urgent password requests",
+        "extra": "messages, channel, sender_domain, attachment",
+    },
+    "attachment": {
+        "name": "malicious attachment sandbox analysis",
+        "examples": "PDF, DOCX, XLSX, ZIP, or EXE with macros, hidden executables, double extensions, fake antivirus results",
+        "extra": "filename, size, claimed_type, real_type, macros, signature, extension_chain, hidden_payload, detections",
+    },
+    "browser_exploit": {
+        "name": "browser exploit simulation",
+        "examples": "fake Chrome update, fake CAPTCHA malware, antivirus popup, malicious browser extension, drive-by download",
+        "extra": "url, page_title, popup_text, requested_permissions, download_name",
+    },
+    "mfa": {
+        "name": "MFA fatigue attack",
+        "examples": "repeated push prompts, fake Microsoft login, approval spam, suspicious login alerts",
+        "extra": "app, location, ip, device, prompt_count",
+    },
+    "cloud": {
+        "name": "enterprise cloud breach",
+        "examples": "suspicious OneDrive shares, Google Workspace alerts, Dropbox scams, unauthorized login attempts",
+        "extra": "shares, data_risk, sessions",
+    },
+    "insider": {
+        "name": "insider threat analyst workflow",
+        "examples": "unauthorized file copying, privilege misuse, password sharing, suspicious USB usage",
+        "extra": "employees, risky_files, policy_trigger",
+    },
+    "wifi": {
+        "name": "rogue WiFi or network spoofing attack",
+        "examples": "airport WiFi, cafe hotspot, captive portal, evil twin, credential capture",
+        "extra": "networks, captive_portal, vpn, location",
+    },
+    "dns": {
+        "name": "DNS spoofing and pharming attack",
+        "examples": "legitimate domain redirected to fake version, SSL mismatch, domain verification, browser warnings",
+        "extra": "requested_domain, expected_ip, resolved_ip, cert_subject, resolver_notes",
+    },
+    "deepfake": {
+        "name": "deepfake or AI impersonation scam",
+        "examples": "fake CEO voice note, AI urgent message, synthetic identity verification request",
+        "extra": "impersonated, channel, transcript, markers",
+    },
+    "attack_chain": {
+        "name": "multi-stage connected attack chain",
+        "examples": "phishing email, fake login page, MFA fatigue, internal chat scam, ransomware infection",
+        "extra": "stages, initial_access, final_impact",
+    },
+}
+
+
+def build_advanced_prompt(category: str, difficulty: str, seed: int, industry: str, theme: str,
+                          location: str, correct_pos: str, archetype: str) -> str:
+    context = ADVANCED_MODULE_CONTEXT.get(category, ADVANCED_MODULE_CONTEXT["chat"])
+    return f"""Generate a {difficulty}-difficulty CyberGuard scenario #{seed}.
+Module: {context["name"]}.
+Industry: {industry}. Theme: {theme}. Location context: {location}.
+
+Scenario examples to draw from: {context["examples"]}.
+Make it realistic, corporate, investigation-driven, and simulation-based rather than quiz-like.
+Do not reuse Amazon, PayPal, FedEx, Google, Microsoft, or generic consumer phishing examples unless the module specifically requires a fake Microsoft-style identity prompt.
+
+Respond ONLY with valid JSON and no markdown. Include exactly these top-level keys:
+type, from, sender, subject, body, extra_data, options, correct_id, flags.
+
+The extra_data object must include useful fields for: {context["extra"]}.
+The options array must contain four unique decisions with id values opt1, opt2, opt3, opt4, each with label and desc.
+The correct defensive decision must be: {archetype}
+Set correct_id to "{correct_pos}".
+Include at least four red flags in flags.
+
+Easy = obvious suspicious indicators.
+Medium = plausible but detectable with investigation.
+Hard = sophisticated and subtle, requiring careful verification."""
+
 
 async def generate_ai_scenario(category: str, difficulty: str, used_types: list[str] = [], used_subjects: list[str] = []) -> dict | None:
     if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your-anthropic-api-key-here":
@@ -97,12 +175,19 @@ async def generate_ai_scenario(category: str, difficulty: str, used_types: list[
     correct_pos = random.choice(["opt1", "opt2", "opt3", "opt4"])
     archetype = random.choice(ARCHETYPES)
 
-    prompt_template = PROMPTS.get(category, PROMPTS["email"])
-    prompt = prompt_template.format(
-        difficulty=difficulty, seed=seed, industry=industry,
-        theme=theme, location=location, correct_pos=correct_pos,
-        archetype=archetype,
-    )
+    if category in PROMPTS:
+        prompt_template = PROMPTS[category]
+        prompt = prompt_template.format(
+            difficulty=difficulty, seed=seed, industry=industry,
+            theme=theme, location=location, correct_pos=correct_pos,
+            archetype=archetype,
+        )
+    else:
+        prompt = build_advanced_prompt(
+            category=category, difficulty=difficulty, seed=seed,
+            industry=industry, theme=theme, location=location,
+            correct_pos=correct_pos, archetype=archetype,
+        )
 
     try:
         async with httpx.AsyncClient(timeout=45.0) as client:

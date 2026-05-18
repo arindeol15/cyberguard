@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as api from './api';
+import { ADVANCED_CATEGORIES, AdvancedScenarioPanel, IncidentResponseMode, SOCDashboard } from './AdvancedModules';
 
 const DIFF = {
   Easy: { bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.3)', color: '#22c55e', pts: 10 },
@@ -13,6 +14,7 @@ const CATEGORIES = [
   { id: 'qr', label: 'QR Attack', icon: '▦', desc: 'Malicious QR codes', color: '#a855f7' },
   { id: 'vishing', label: 'Vishing', icon: '◉', desc: 'Phone scam detection', color: '#ec4899' },
   { id: 'usb', label: 'USB Drop', icon: '◆', desc: 'USB threat assessment', color: '#f59e0b' },
+  ...ADVANCED_CATEGORIES,
 ];
 
 const SEVERITY_COLORS = { Critical: '#ef4444', High: '#f59e0b', Medium: '#eab308', Low: '#22c55e' };
@@ -45,6 +47,7 @@ export default function App() {
         {page === 'home' && <HomePage user={user} setPage={setPage} difficulty={difficulty} setDifficulty={setDifficulty} category={category} setCategory={setCategory} useAi={useAi} setUseAi={setUseAi} />}
         {page === 'scenario' && <ScenarioPage setPage={setPage} refreshUser={refreshUser} difficulty={difficulty} useAi={useAi} category={category} />}
         {page === 'threats' && <ThreatPage />}
+        {page === 'soc' && <SOCDashboard user={user} />}
         {page === 'leaderboard' && <LeaderboardPage user={user} />}
         {page === 'stats' && <StatsPage />}
       </div>
@@ -78,6 +81,7 @@ function NavBar({ user, page, setPage, onLogout }) {
         {[
           { id: 'home', l: 'Home', i: '◉' },
           { id: 'threats', l: 'Live Threats', i: '⚡' },
+          { id: 'soc', l: 'SOC', i: 'SOC' },
           { id: 'leaderboard', l: 'Leaderboard', i: '◆' },
           { id: 'stats', l: 'Analytics', i: '▦' },
         ].map(n => (
@@ -310,7 +314,7 @@ function HomePage({ user, setPage, difficulty, setDifficulty, category, setCateg
           <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '1px' }}>{CATEGORIES.length} ACTIVE</span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           {CATEGORIES.map((c, i) => (
             <button key={c.id} onClick={() => setCategory(c.id)} style={{
               padding: 16, borderRadius: 12, textAlign: 'left',
@@ -553,6 +557,8 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
             </div>
           </div>
         )}
+
+        <AdvancedScenarioPanel category={category} scenario={scenario} selected={selected} setSelected={setSelected} />
       </div>
 
       {/* Actions */}
@@ -641,6 +647,8 @@ function ResultView({ result, scenario, category, catInfo, onNext, onHome }) {
           </div>
         ))}
       </div>
+
+      {!result.correct && <IncidentResponseMode scenario={scenario} />}
 
       <div style={{ display: 'flex', gap: 10 }}>
         <button onClick={onHome} style={{
