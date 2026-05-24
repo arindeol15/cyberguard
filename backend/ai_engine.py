@@ -6,7 +6,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+ANTHROPIC_MODEL_CANDIDATES = [
+    ANTHROPIC_MODEL,
+    "claude-sonnet-4-6",
+    "claude-sonnet-4-5-20250929",
+    "claude-3-5-haiku-20241022",
+    "claude-3-haiku-20240307",
+]
 LAST_AI_STATUS = {
     "provider": "not_checked",
     "last_error": None,
@@ -200,10 +207,21 @@ def has_real_anthropic_key() -> bool:
     return not any(marker in lower for marker in placeholder_markers)
 
 
-def set_ai_status(provider: str, error: str | None = None):
+def model_candidates() -> list[str]:
+    seen = set()
+    models = []
+    for model in ANTHROPIC_MODEL_CANDIDATES:
+        clean = str(model or "").strip()
+        if clean and clean not in seen:
+            models.append(clean)
+            seen.add(clean)
+    return models
+
+
+def set_ai_status(provider: str, error: str | None = None, model: str | None = None):
     LAST_AI_STATUS["provider"] = provider
     LAST_AI_STATUS["last_error"] = error[:500] if error else None
-    LAST_AI_STATUS["model"] = ANTHROPIC_MODEL
+    LAST_AI_STATUS["model"] = model or ANTHROPIC_MODEL
 
 
 def get_ai_status() -> dict:
@@ -215,6 +233,8 @@ def get_ai_status() -> dict:
         "provider_last_used": LAST_AI_STATUS["provider"],
         "last_error": LAST_AI_STATUS["last_error"],
         "model": ANTHROPIC_MODEL,
+        "model_last_used": LAST_AI_STATUS["model"],
+        "model_candidates": model_candidates(),
     }
 
 
@@ -629,37 +649,47 @@ async def generate_ai_scenario(category: str, difficulty: str, used_types: list[
         set_ai_status("fallback", "ANTHROPIC_API_KEY is missing or still looks like a placeholder.")
         return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
 
-    try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY.strip(),
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": ANTHROPIC_MODEL,
-                    "max_tokens": 2000,
-                    "temperature": 1.0,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            text = "".join(b["text"] for b in data.get("content", []) if b.get("type") == "text")
-            result = extract_json_object(text)
-            result["correct_id"] = result.get("correct_id") or correct_pos
-            set_ai_status("claude", None)
-            return normalize_ai_result(result, category, difficulty, correct_pos)
-    except httpx.HTTPStatusError as e:
-        detail = e.response.text[:300] if e.response is not None else str(e)
-        message = f"Claude HTTP {e.response.status_code if e.response is not None else 'error'}: {detail}"
-        set_ai_status("fallback", message)
-        print(f"AI generation failed: {message}")
-        return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
-    except Exception as e:
-        message = f"{type(e).__name__}: {e}"
-        set_ai_status("fallback", message)
-        print(f"AI generation failed: {message}")
-        return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
+    last_error = None
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        for model in model_candidates():
+            try:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-api-key": ANTHROPIC_API_KEY.strip(),
+                        "anthropic-version": "2023-06-01",
+                    },
+                    json={
+                        "model": model,
+                        "max_tokens": 2000,
+                        "temperature": 1.0,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+                text = "".join(b["text"] for b in data.get("content", []) if b.get("type") == "text")
+                result = extract_json_object(text)
+                result["correct_id"] = result.get("correct_id") or correct_pos
+                set_ai_status("claude", None, model)
+                return normalize_ai_result(result, category, difficulty, correct_pos)
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code if e.response is not None else "error"
+                detail = e.response.text[:300] if e.response is not None else str(e)
+                last_error = f"Claude HTTP {status} for {model}: {detail}"
+                if status == 404:
+                    continue
+                set_ai_status("fallback", last_error, model)
+                print(f"AI generation failed: {last_error}")
+                return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
+            except Exception as e:
+                last_error = f"{type(e).__name__} for {model}: {e}"
+                set_ai_status("fallback", last_error, model)
+                print(f"AI generation failed: {last_error}")
+                return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
+
+    if last_error:
+        set_ai_status("fallback", last_error, model_candidates()[-1])
+        print(f"AI generation failed: {last_error}")
+    return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
