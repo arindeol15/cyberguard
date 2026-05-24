@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import * as api from './api';
 import { ADVANCED_CATEGORIES, AdvancedScenarioPanel, IncidentResponseMode, SOCDashboard } from './AdvancedModules';
+import SimulationAudioPlayer from './SimulationAudioPlayer';
+import InteractiveCorePanel from './InteractiveCoreModules';
 
 const DIFF = {
   Easy: { bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.3)', color: '#22c55e', pts: 10 },
@@ -398,11 +400,18 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const startTime = useRef(Date.now());
 
   const load = async () => {
-    setLoading(true); setSelected(null); setResult(null); startTime.current = Date.now();
-    try { setScenario(await api.generateScenario(difficulty, useAi, category)); } catch (e) { console.error(e); }
+    setLoading(true); setSelected(null); setResult(null); setLoadError(''); startTime.current = Date.now();
+    try {
+      setScenario(await api.generateScenario(difficulty, useAi, category));
+    } catch (e) {
+      console.error(e);
+      setScenario(null);
+      setLoadError(e.message || 'Scenario failed to load.');
+    }
     setLoading(false);
   };
 
@@ -410,7 +419,15 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
 
   const submit = async () => {
     if (!selected) return; setSubmitting(true);
-    try { const r = await api.submitAnswer(scenario.id, selected, (Date.now() - startTime.current) / 1000); setResult(r); refreshUser(); } catch (e) { console.error(e); }
+    try {
+      const responseTime = (Date.now() - startTime.current) / 1000;
+      const r = await api.submitAnswer(scenario.id, selected, responseTime);
+      setResult({ ...r, response_time: responseTime });
+      refreshUser();
+    } catch (e) {
+      console.error(e);
+      setLoadError(e.message || 'Response submission failed.');
+    }
     setSubmitting(false);
   };
 
@@ -435,7 +452,8 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
 
   if (!scenario) return (
     <div style={{ textAlign: 'center', padding: '80px 0' }}>
-      <p style={{ color: 'var(--text-muted)' }}>Failed to load scenario.</p>
+      <p style={{ color: 'var(--text-muted)' }}>{loadError || 'Failed to load scenario.'}</p>
+      <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8 }}>The simulator stayed online. Retry will request a fresh scenario for this module.</p>
       <button onClick={load} style={{ marginTop: 12, padding: '10px 24px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'inherit' }}>Retry</button>
     </div>
   );
@@ -558,6 +576,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
           </div>
         )}
 
+        <InteractiveCorePanel category={category} scenario={scenario} selected={selected} setSelected={setSelected} />
         <AdvancedScenarioPanel category={category} scenario={scenario} selected={selected} setSelected={setSelected} />
       </div>
 
@@ -582,6 +601,12 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         </div>
       </div>
 
+      {loadError && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca', fontSize: 12 }}>
+          {loadError}
+        </div>
+      )}
+
       {selected && (
         <button onClick={submit} disabled={submitting} style={{
           width: '100%', padding: 14, borderRadius: 12, border: 'none',
@@ -598,6 +623,97 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
 }
 
 // ── RESULT VIEW ──
+function ResultMetrics({ result, scenario, category, catInfo }) {
+  const flags = result.red_flags || [];
+  const responseTime = result.response_time || 0;
+  const difficultyWeight = { Easy: 10, Medium: 18, Hard: 26 }[scenario?.difficulty] || 18;
+  const speedBonus = responseTime && responseTime < 25 ? 8 : responseTime && responseTime < 60 ? 4 : 0;
+  const riskScore = result.correct ? Math.max(4, 28 - speedBonus) : Math.min(96, 58 + difficultyWeight + flags.length * 4);
+  const suspicionScore = result.correct ? Math.min(100, 72 + difficultyWeight + speedBonus) : Math.max(18, 46 - Math.floor(responseTime / 12));
+  const detectionRate = result.correct ? Math.min(100, 78 + flags.length * 4) : Math.max(20, 52 - flags.length * 2);
+  const accuracy = result.correct ? 100 : 35;
+  const awareness = Math.round((suspicionScore + detectionRate + accuracy + (100 - riskScore)) / 4);
+  const heat = Array.from({ length: 28 }, (_, i) => (i * 17 + riskScore + suspicionScore) % 100);
+  const techniques = {
+    email: ['sender spoofing', 'urgency', 'credential harvesting'],
+    website: ['domain impersonation', 'certificate confusion', 'fake login'],
+    qr: ['quishing', 'redirect abuse', 'mobile trust gap'],
+    vishing: ['authority pressure', 'voice social engineering', 'callback avoidance'],
+    usb: ['curiosity bait', 'removable media malware', 'autorun payloads'],
+    chat: ['internal impersonation', 'collaboration abuse', 'document lure'],
+    attachment: ['macro abuse', 'double extension', 'sandbox evasion'],
+    browser_exploit: ['fake update', 'malicious permissions', 'drive-by lure'],
+    mfa: ['push fatigue', 'session takeover', 'impossible travel'],
+    cloud: ['token misuse', 'external sharing', 'session persistence'],
+    insider: ['privilege misuse', 'data staging', 'policy evasion'],
+    wifi: ['evil twin', 'captive portal theft', 'downgrade risk'],
+    dns: ['pharming', 'certificate mismatch', 'resolver poisoning'],
+    deepfake: ['synthetic voice', 'urgency manipulation', 'identity spoofing'],
+    attack_chain: ['multi-stage intrusion', 'identity pivot', 'ransomware path'],
+  }[category] || ['social engineering', 'trust abuse'];
+  const strengths = result.correct
+    ? ['Selected a defensible response', 'Reduced downstream compromise risk', `Handled ${catInfo?.label || category} indicators`]
+    : ['Completed the scenario', 'Reached incident review mode'];
+  const weaknesses = result.correct
+    ? ['Keep validating secondary evidence before acting']
+    : ['Missed one or more red flags', 'Action increased attacker leverage', 'Needs stronger verification habit'];
+  const recommendations = result.correct
+    ? ['Practice a harder variation', 'Continue out-of-band verification', 'Document evidence before closing the incident']
+    : ['Slow down and inspect identity, domain, and requested action', 'Use official channels rather than embedded prompts', 'Report early when urgency or secrecy appears'];
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 22, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '1.5px', fontWeight: 800 }}>PERFORMANCE ANALYTICS</div>
+          <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 800, marginTop: 4 }}>Awareness score: {awareness}/100</div>
+        </div>
+        <div style={{ fontSize: 22, color: awareness >= 75 ? '#22c55e' : awareness >= 50 ? '#f59e0b' : '#ef4444', fontWeight: 900, fontFamily: "'JetBrains Mono', monospace" }}>{awareness}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10, marginBottom: 18 }}>
+        {[
+          ['Risk Score', `${riskScore}/100`, riskScore > 65 ? '#ef4444' : riskScore > 35 ? '#f59e0b' : '#22c55e'],
+          ['Suspicion', `${suspicionScore}%`, '#22d3ee'],
+          ['Detection Rate', `${detectionRate}%`, '#a855f7'],
+          ['Response Time', responseTime ? `${Math.round(responseTime)}s` : 'n/a', '#f59e0b'],
+          ['Decision Accuracy', `${accuracy}%`, result.correct ? '#22c55e' : '#ef4444'],
+        ].map(([label, value, color]) => (
+          <div key={label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 5 }}>{label.toUpperCase()}</div>
+            <div style={{ fontSize: 17, color, fontWeight: 900, fontFamily: "'JetBrains Mono', monospace" }}>{value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, marginBottom: 8 }}>STRENGTHS</div>
+          {strengths.map(s => <div key={s} style={{ fontSize: 12, color: '#bbf7d0', marginBottom: 6 }}>{s}</div>)}
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, marginBottom: 8 }}>WEAKNESSES</div>
+          {weaknesses.map(s => <div key={s} style={{ fontSize: 12, color: '#fde68a', marginBottom: 6 }}>{s}</div>)}
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, marginBottom: 8 }}>ATTACK TECHNIQUES</div>
+          {techniques.map(t => <div key={t} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{t}</div>)}
+        </div>
+      </div>
+      <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, marginBottom: 8 }}>ATTACK HEATMAP</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+            {heat.map((h, i) => <div key={i} style={{ height: 18, borderRadius: 5, background: h > 70 ? 'rgba(239,68,68,0.72)' : h > 42 ? 'rgba(245,158,11,0.62)' : 'rgba(34,197,94,0.34)' }} />)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, marginBottom: 8 }}>IMPROVEMENT PLAN</div>
+          {recommendations.map(r => <div key={r} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{r}</div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResultView({ result, scenario, category, catInfo, onNext, onHome }) {
   return (
     <div style={{ animation: 'fadeInUp 0.4s' }}>
@@ -626,6 +742,8 @@ function ResultView({ result, scenario, category, catInfo, onNext, onHome }) {
           </div>
         )}
       </div>
+
+      <ResultMetrics result={result} scenario={scenario} category={category} catInfo={catInfo} />
 
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -1051,63 +1169,35 @@ function QRCode({ url }) {
 
 // ── VISHING PLAYER ──
 function VishingPlayer({ transcript, callerName }) {
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const intervalRef = useRef(null);
-
-  const extractLines = (text) => text.split('\n').filter(l => l.trim().startsWith('Caller:')).map(l => l.replace('Caller:', '').trim()).join('. ');
-
-  const play = () => {
-    if (playing) {
-      window.speechSynthesis.cancel();
-      setPlaying(false); setProgress(0);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
-    }
-    const text = extractLines(transcript);
-    if (!text) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.9; u.pitch = 0.8;
-    const voices = window.speechSynthesis.getVoices();
-    const v = voices.find(x => x.name.includes('Male') || x.name.includes('Daniel') || x.name.includes('David'));
-    if (v) u.voice = v;
-    u.onend = () => { setPlaying(false); setProgress(100); if (intervalRef.current) clearInterval(intervalRef.current); };
-
-    setPlaying(true); setProgress(0);
-    const words = text.split(' ').length;
-    const dur = (words / 2.5) * 1000;
-    const step = 100 / (dur / 200);
-    intervalRef.current = setInterval(() => {
-      setProgress(p => { if (p >= 99) { clearInterval(intervalRef.current); return 100; } return p + step; });
-    }, 200);
-    window.speechSynthesis.speak(u);
+  const extractLines = (text) => {
+    const callerLines = text
+      .split('\n')
+      .filter(l => l.trim().toLowerCase().startsWith('caller:'))
+      .map(l => l.replace(/caller:/i, '').trim())
+      .join('. ');
+    return callerLines || text;
   };
 
   return (
     <div style={{
       background: 'linear-gradient(135deg, #1e1b4b, #0a0f1c)',
-      borderRadius: 14, padding: 16, minWidth: 200, flexShrink: 0,
+      borderRadius: 14, padding: 16, minWidth: 260, flexShrink: 0,
       border: '1px solid var(--border-strong)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-        <button onClick={play} style={{
-          width: 44, height: 44, borderRadius: '50%', border: 'none',
-          background: playing ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #22c55e, #16a34a)',
-          color: '#fff', fontSize: 16, fontFamily: 'inherit', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: `0 0 16px ${playing ? 'rgba(239,68,68,0.5)' : 'rgba(34,197,94,0.5)'}`,
-        }}>{playing ? '■' : '▶'}</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900 }}>CALL</div>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>Incoming Call</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>Incoming Call</div>
           <div style={{ fontSize: 10, color: '#94a3b8' }}>{callerName}</div>
         </div>
       </div>
-      <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${progress}%`, background: '#22c55e', transition: 'width 0.2s' }} />
-      </div>
-      <div style={{ fontSize: 10, color: '#64748b', marginTop: 8, textAlign: 'center', letterSpacing: '0.5px' }}>
-        {playing ? '◉ LIVE CALL' : progress > 0 ? '◌ ENDED' : '▶ Click to play'}
-      </div>
+      <SimulationAudioPlayer
+        title="Caller Audio"
+        subtitle="Answer, pause, replay, or inspect transcript"
+        transcript={extractLines(transcript)}
+        accent="#22c55e"
+        voiceHint="male"
+      />
     </div>
   );
 }

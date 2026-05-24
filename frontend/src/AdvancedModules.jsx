@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as api from './api';
+import SimulationAudioPlayer from './SimulationAudioPlayer';
 
 export const ADVANCED_CATEGORIES = [
   { id: 'chat', label: 'Internal Chat', icon: 'CH', desc: 'Teams and Slack scams', color: '#14b8a6' },
@@ -601,47 +602,49 @@ function DNSSpoofingSimulator({ scenario, setSelected }) {
 
 function DeepfakeScamSimulator({ scenario, setSelected }) {
   const data = scenario.extra_data || {};
-  const [playing, setPlaying] = useState(false);
   const [analysis, setAnalysis] = useState(false);
+  const [identityCheck, setIdentityCheck] = useState(false);
   const markers = listValue(data.markers, ['Urgent payment pressure', 'No callback path', 'Synthetic cadence', 'Requests secrecy']);
+  const transcript = data.transcript || scenario.body || 'I need you to approve the vendor payment before the board call. Do not loop in finance yet; I will explain after the transfer clears.';
 
   return (
-    <PanelShell label="DEEPFAKE AND AI SCAM REVIEW">
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14 }}>
-        <div style={{ ...cardStyle, padding: 18, textAlign: 'center' }}>
-          <div style={{ width: 86, height: 86, borderRadius: '50%', margin: '0 auto 14px', background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 28, fontWeight: 900, boxShadow: '0 0 24px rgba(236,72,153,0.35)' }}>
+    <PanelShell label="AI MEDIA FORENSICS">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+        <div style={{ ...cardStyle, padding: 18 }}>
+          <div style={{ width: 96, height: 96, borderRadius: '50%', margin: '0 auto 14px', background: 'radial-gradient(circle at 35% 30%, #f9a8d4, #ec4899 42%, #4c1d95)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 30, fontWeight: 900, boxShadow: '0 0 28px rgba(236,72,153,0.42)' }}>
             {data.impersonated?.charAt(0) || 'C'}
           </div>
-          <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 800 }}>{data.impersonated || 'CEO Voice Note'}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{data.channel || 'Encrypted voice message'}</div>
-          <button onClick={() => setPlaying(!playing)} style={{
-            marginTop: 16,
-            width: 54,
-            height: 54,
-            borderRadius: '50%',
-            border: 'none',
-            background: playing ? '#ef4444' : '#22c55e',
-            color: '#fff',
-            fontWeight: 900,
-            fontFamily: 'inherit',
-          }}>{playing ? 'STOP' : 'PLAY'}</button>
-          <div style={{ height: 5, background: 'var(--bg-elevated)', borderRadius: 4, marginTop: 14, overflow: 'hidden' }}>
-            <div style={{ width: playing ? '82%' : '22%', height: '100%', background: '#ec4899', transition: 'width 1.2s' }} />
+          <div style={{ textAlign: 'center', marginBottom: 14 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900 }}>{data.impersonated || 'CEO Voice Note'}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{data.channel || 'Encrypted voice message'}</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <Signal label="LIVENESS" value={identityCheck ? 'Challenge sent' : 'Unchecked'} color={identityCheck ? '#f59e0b' : '#94a3b8'} />
+            <Signal label="VOICE MATCH" value={analysis ? '74% risk' : 'Pending'} color={analysis ? '#ef4444' : '#94a3b8'} />
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>Transcript</div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, padding: 14, border: '1px solid var(--border)', borderRadius: 10, marginBottom: 12 }}>
-            {data.transcript || 'I need you to approve the vendor payment before the board call. Do not loop in finance yet; I will explain after the transfer clears.'}
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <SimulationAudioPlayer
+            title="Voice Note Playback"
+            subtitle={data.impersonated || 'Potential AI impersonation'}
+            transcript={transcript}
+            audioSrc={data.audio_url || data.audioSrc || ''}
+            voiceHint="male"
+            accent="#ec4899"
+          />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
             <SmallButton onClick={() => setAnalysis(true)} tone="info">Analyze Voice</SmallButton>
-            <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['verify', 'callback', 'channel'])} tone="good">Verify Identity</SmallButton>
+            <SmallButton onClick={() => { setIdentityCheck(true); selectByKeywords(scenario, setSelected, ['verify', 'callback', 'channel', 'out-of-band']); }} tone="good">Verify Identity</SmallButton>
             <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'security'])} tone="good">Report Scam</SmallButton>
           </div>
+          {identityCheck && (
+            <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: '1px solid rgba(34,211,238,0.28)', background: 'rgba(34,211,238,0.08)', color: '#bae6fd', fontSize: 12, lineHeight: 1.6 }}>
+              Out-of-band verification queued: call the known executive assistant number and ask for a live challenge phrase before taking action.
+            </div>
+          )}
           {analysis && (
             <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {markers.map(m => <Signal key={m} label="MARKER" value={m} color={m.includes('Synthetic') ? '#ef4444' : '#f59e0b'} />)}
+              {markers.map(m => <Signal key={m} label="FORENSIC MARKER" value={m} color={m.toLowerCase().includes('synthetic') ? '#ef4444' : '#f59e0b'} />)}
             </div>
           )}
         </div>
