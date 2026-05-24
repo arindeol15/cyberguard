@@ -394,6 +394,58 @@ function HomePage({ user, setPage, difficulty, setDifficulty, category, setCateg
 }
 
 // ── SCENARIO PAGE ──
+function safeUrlInfo(rawUrl, fallback = 'https://suspicious-site.example/login') {
+  const raw = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+  const lower = raw.toLowerCase();
+  const isPlaceholder = !raw || lower === 'n/a' || lower.startsWith('n/a ') || lower.includes('overlay popup');
+  const candidate = isPlaceholder ? fallback : (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+
+  try {
+    const parsed = new URL(candidate);
+    return {
+      displayUrl: isPlaceholder ? (raw || fallback) : candidate,
+      href: parsed.href,
+      hostname: parsed.hostname,
+      valid: !isPlaceholder,
+    };
+  } catch {
+    const parsedFallback = new URL(fallback);
+    return {
+      displayUrl: raw || fallback,
+      href: parsedFallback.href,
+      hostname: parsedFallback.hostname,
+      valid: false,
+    };
+  }
+}
+
+function normalizeWebsiteExtra(extra = {}) {
+  const fake = safeUrlInfo(extra.fake_url || extra.requested_domain);
+  const real = safeUrlInfo(extra.real_url || extra.official_url || 'https://official.example.com', 'https://official.example.com');
+  const sslStatus = String(extra.ssl_status ?? '').toLowerCase();
+  const sslValid = typeof extra.ssl_valid === 'boolean'
+    ? extra.ssl_valid
+    : ['valid', 'trusted', 'lets_encrypt', 'letsencrypt', 'present'].includes(sslStatus);
+  const sslLabel = sslValid
+    ? (sslStatus === 'lets_encrypt' ? 'Certificate present' : 'Valid')
+    : (sslStatus === 'n/a' ? 'Not applicable' : 'No SSL');
+  const ageValue = extra.domain_age ?? extra.domain_age_days;
+  const domainAge = ageValue === undefined || ageValue === null || ageValue === ''
+    ? 'Unknown'
+    : (typeof ageValue === 'number' ? `${ageValue} days` : String(ageValue));
+
+  return {
+    fakeUrl: fake.displayUrl,
+    fakeHost: fake.hostname,
+    fakeUrlValid: fake.valid,
+    realUrl: real.displayUrl,
+    realHost: real.hostname,
+    sslValid,
+    sslLabel,
+    domainAge,
+  };
+}
+
 function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const [scenario, setScenario] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -458,6 +510,8 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
     </div>
   );
 
+  const websiteExtra = category === 'website' ? normalizeWebsiteExtra(scenario.extra_data || {}) : null;
+
   if (result) return (
     <ResultView result={result} scenario={scenario} category={category} catInfo={catInfo} onNext={load} onHome={() => setPage('home')} />
   );
@@ -518,20 +572,25 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         <div style={{ padding: 24, fontSize: 14, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{scenario.body}</div>
 
         {/* Category-specific panels */}
-        {scenario.extra_data && category === 'website' && (
+        {websiteExtra && (
           <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>BROWSER ANALYSIS</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16, fontSize: 12 }}>
               <div style={{ padding: 10, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>SSL Status</div>
-                <div style={{ color: scenario.extra_data.ssl_valid ? '#22c55e' : '#ef4444', fontWeight: 600 }}>{scenario.extra_data.ssl_valid ? '🔒 Valid' : '⚠ No SSL'}</div>
+                <div style={{ color: websiteExtra.sslValid ? '#22c55e' : '#ef4444', fontWeight: 600 }}>{websiteExtra.sslLabel}</div>
               </div>
               <div style={{ padding: 10, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>Domain Age</div>
-                <div style={{ color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{scenario.extra_data.domain_age}</div>
+                <div style={{ color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{websiteExtra.domainAge}</div>
               </div>
             </div>
-            <FakeBrowser fakeUrl={scenario.extra_data.fake_url} realUrl={scenario.extra_data.real_url} ssl={scenario.extra_data.ssl_valid} subject={scenario.subject} />
+            {!websiteExtra.fakeUrlValid && (
+              <div style={{ marginBottom: 12, padding: 10, borderRadius: 8, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)', color: '#fbbf24', fontSize: 12 }}>
+                This scenario uses a popup or overlay instead of a normal URL, so the simulator is showing a safe reconstructed browser view.
+              </div>
+            )}
+            <FakeBrowser fakeUrl={websiteExtra.fakeUrl} realUrl={websiteExtra.realUrl} ssl={websiteExtra.sslValid} subject={scenario.subject} />
           </div>
         )}
 
@@ -970,7 +1029,10 @@ function StatsPage() {
 function FakeBrowser({ fakeUrl, realUrl, ssl, subject }) {
   const [open, setOpen] = useState(false);
   const [warning, setWarning] = useState(false);
-  const domain = fakeUrl ? new URL(fakeUrl).hostname : 'fake-site.com';
+  const fake = safeUrlInfo(fakeUrl);
+  const real = safeUrlInfo(realUrl, 'https://official.example.com');
+  const domain = fake.hostname;
+  const sslOk = Boolean(ssl);
 
   return (
     <div>
@@ -992,8 +1054,8 @@ function FakeBrowser({ fakeUrl, realUrl, ssl, subject }) {
               <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 8 }}>{subject}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', borderRadius: 6, padding: '6px 10px', border: '1px solid #d1d5db' }}>
-              <span style={{ fontSize: 12 }}>{ssl ? '🔒' : '⚠️'}</span>
-              <span style={{ fontSize: 11, fontFamily: 'monospace', color: ssl ? '#374151' : '#dc2626', flex: 1 }}>{fakeUrl}</span>
+              <span style={{ fontSize: 12 }}>{sslOk ? '🔒' : '⚠️'}</span>
+              <span style={{ fontSize: 11, fontFamily: 'monospace', color: sslOk ? '#374151' : '#dc2626', flex: 1 }}>{fake.displayUrl}</span>
             </div>
           </div>
 
@@ -1022,8 +1084,8 @@ function FakeBrowser({ fakeUrl, realUrl, ssl, subject }) {
                 Credentials would be sent to the attacker at <strong style={{ fontFamily: 'monospace' }}>{domain}</strong>.
               </div>
               <div style={{ fontSize: 11, lineHeight: 1.6 }}>
-                <div>Fake: <span style={{ fontFamily: 'monospace' }}>{fakeUrl}</span></div>
-                <div>Real: <span style={{ fontFamily: 'monospace', color: '#86efac' }}>{realUrl}</span></div>
+                <div>Fake: <span style={{ fontFamily: 'monospace' }}>{fake.displayUrl}</span></div>
+                <div>Real: <span style={{ fontFamily: 'monospace', color: '#86efac' }}>{real.displayUrl}</span></div>
               </div>
               <button onClick={() => { setOpen(false); setWarning(false); }} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 6, border: '1px solid #fff', background: 'transparent', color: '#fff', fontSize: 11, fontFamily: 'inherit' }}>Close</button>
             </div>
