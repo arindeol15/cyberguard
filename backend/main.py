@@ -8,7 +8,7 @@ from database import init_db, get_db, User, Scenario, Response, ThreatFeed
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from schemas import (RegisterRequest, LoginRequest, TokenResponse, UserResponse,
     GenerateRequest, SubmitRequest, SubmitResponse, LeaderboardEntry)
-from ai_engine import generate_ai_scenario
+from ai_engine import generate_ai_scenario, get_ai_status
 from seed import seed_database
 from scenarios_seed import ALL_SCENARIOS
 
@@ -439,6 +439,11 @@ def scenarios_stats(db: Session = Depends(get_db)):
     return result
 
 # ── LEADERBOARD ──
+@app.get("/api/ai/status")
+def ai_status():
+    """Safe AI provider diagnostics. Does not expose the API key."""
+    return get_ai_status()
+
 @app.get("/api/leaderboard", response_model=list[LeaderboardEntry])
 def get_leaderboard(db: Session = Depends(get_db)):
     users = db.query(User).filter(User.total_scenarios > 0).order_by(User.score.desc()).limit(20).all()

@@ -6,6 +6,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+LAST_AI_STATUS = {
+    "provider": "not_checked",
+    "last_error": None,
+    "model": ANTHROPIC_MODEL,
+}
 
 PROMPTS = {
     "email": """Generate a {difficulty}-difficulty phishing EMAIL scenario #{seed}.
@@ -192,6 +198,24 @@ def has_real_anthropic_key() -> bool:
     lower = key.lower()
     placeholder_markers = ["your-", "replace", "placeholder", "api-key-here", "changeme", "dummy"]
     return not any(marker in lower for marker in placeholder_markers)
+
+
+def set_ai_status(provider: str, error: str | None = None):
+    LAST_AI_STATUS["provider"] = provider
+    LAST_AI_STATUS["last_error"] = error[:500] if error else None
+    LAST_AI_STATUS["model"] = ANTHROPIC_MODEL
+
+
+def get_ai_status() -> dict:
+    key = ANTHROPIC_API_KEY.strip()
+    return {
+        "key_present": bool(key),
+        "key_looks_real": has_real_anthropic_key(),
+        "key_length": len(key) if key else 0,
+        "provider_last_used": LAST_AI_STATUS["provider"],
+        "last_error": LAST_AI_STATUS["last_error"],
+        "model": ANTHROPIC_MODEL,
+    }
 
 
 def build_options(correct_pos: str, safe_label: str, safe_desc: str, risky_options: list[tuple[str, str]]) -> list[dict]:
@@ -602,6 +626,7 @@ async def generate_ai_scenario(category: str, difficulty: str, used_types: list[
         )
 
     if not has_real_anthropic_key():
+        set_ai_status("fallback", "ANTHROPIC_API_KEY is missing or still looks like a placeholder.")
         return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
 
     try:
@@ -610,11 +635,11 @@ async def generate_ai_scenario(category: str, difficulty: str, used_types: list[
                 "https://api.anthropic.com/v1/messages",
                 headers={
                     "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
+                    "x-api-key": ANTHROPIC_API_KEY.strip(),
                     "anthropic-version": "2023-06-01",
                 },
                 json={
-                    "model": "claude-sonnet-4-20250514",
+                    "model": ANTHROPIC_MODEL,
                     "max_tokens": 2000,
                     "temperature": 1.0,
                     "messages": [{"role": "user", "content": prompt}],
@@ -625,7 +650,16 @@ async def generate_ai_scenario(category: str, difficulty: str, used_types: list[
             text = "".join(b["text"] for b in data.get("content", []) if b.get("type") == "text")
             result = extract_json_object(text)
             result["correct_id"] = result.get("correct_id") or correct_pos
+            set_ai_status("claude", None)
             return normalize_ai_result(result, category, difficulty, correct_pos)
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text[:300] if e.response is not None else str(e)
+        message = f"Claude HTTP {e.response.status_code if e.response is not None else 'error'}: {detail}"
+        set_ai_status("fallback", message)
+        print(f"AI generation failed: {message}")
+        return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
     except Exception as e:
-        print(f"AI generation failed: {e}")
+        message = f"{type(e).__name__}: {e}"
+        set_ai_status("fallback", message)
+        print(f"AI generation failed: {message}")
         return generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
