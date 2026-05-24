@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import json, random, httpx
 
 from database import init_db, get_db, User, Scenario, Response, ThreatFeed
@@ -9,8 +10,9 @@ from schemas import (RegisterRequest, LoginRequest, TokenResponse, UserResponse,
     GenerateRequest, SubmitRequest, SubmitResponse, LeaderboardEntry)
 from ai_engine import generate_ai_scenario
 from seed import seed_database
+from scenarios_seed import ALL_SCENARIOS
 
-app = FastAPI(title="CyberGuard API", version="2.0.0")
+app = FastAPI(title="CyberGuard API", version="2.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 POINTS = {"Easy": 10, "Medium": 20, "Hard": 35}
@@ -25,6 +27,166 @@ CATEGORY_IDS = [
     "chat", "attachment", "browser_exploit", "mfa", "cloud",
     "insider", "wifi", "dns", "deepfake", "attack_chain",
 ]
+
+# ── EXPANDED SEED ADAPTER ──
+# Maps scenarios_seed.py (generic schema) to your DB schema.
+# Your CATEGORY_IDS are short ("email"); seed file uses long ("email_phishing"). Map here.
+SEED_CATEGORY_MAP = {
+    "email_phishing": "email",
+    "fake_website": "website",
+    "qr_attack": "qr",
+    "vishing": "vishing",
+    "usb_drop": "usb",
+    "internal_chat": "chat",
+    "attachment_sandbox": "attachment",
+    "browser_exploit": "browser_exploit",
+    "mfa_fatigue": "mfa",
+    "cloud_breach": "cloud",
+    "insider_threat": "insider",
+    "rogue_wifi": "wifi",
+    "dns_spoofing": "dns",
+    "ai_scam": "deepfake",
+    "attack_chain": "attack_chain",
+}
+
+# Your DB uses Easy/Medium/Hard. Seed uses 4 levels. Map down to 3.
+SEED_DIFFICULTY_MAP = {
+    "beginner": "Easy",
+    "intermediate": "Easy",
+    "advanced": "Medium",
+    "expert": "Hard",
+}
+
+def _seed_to_db_options(option_strings, correct_action_key):
+    """Seed has options as a list of strings, e.g. ['Click link', 'Report as phishing', ...]
+    and `correct_action_key` is a SEMANTIC key ('report'/'ignore'/'verify'/'comply') describing
+    the kind of correct action.
+
+    Your DB stores options as [{"id":"report","label":"...","desc":"..."}, ...] where the
+    `id` field is what gets compared against `Scenario.correct_action` at grading time.
+
+    Strategy: pick the BEST option from option_strings as the correct one (per safety
+    keywords), give it id=correct_action_key, then assign the OTHER options unique placeholder
+    ids that will never accidentally match. Then shuffle_options() randomizes positions
+    at request time."""
+
+    def safety_score(s):
+        """Higher score = safer / more likely to be the correct action.
+        Tuned for the wording used across the 126 seed scenarios."""
+        s_low = s.lower()
+        score = 0
+        # Strong positive signals (the right thing to do)
+        if "report" in s_low: score += 10
+        if "verify" in s_low: score += 8
+        if "hang up" in s_low: score += 8
+        if "block" in s_low: score += 6
+        if "refuse" in s_low: score += 6
+        if "ignore" in s_low: score += 5
+        if "call " in s_low and "back" in s_low: score += 7
+        if "official" in s_low: score += 6
+        if "directly" in s_low: score += 5
+        if "isolate" in s_low: score += 5
+        if "rotate" in s_low: score += 5
+        if "disable" in s_low: score += 4
+        if "factory reset" in s_low: score += 7
+        if "walk away" in s_low: score += 6
+        if "delete and report" in s_low: score += 10
+        if "both:" in s_low: score += 11  # "Both X AND Y" is often the best answer
+        if "mobile data" in s_low or "mobile hotspot" in s_low: score += 4
+        if "via known" in s_low or "known number" in s_low or "known channel" in s_low: score += 6
+
+        # Strong negative signals (the unsafe action)
+        if "click " in s_low and "report" not in s_low: score -= 10
+        if "enter " in s_low and ("credential" in s_low or "password" in s_low or "card" in s_low or "code" in s_low or "info" in s_low or "otp" in s_low or "ssn" in s_low or "details" in s_low): score -= 10
+        if "install" in s_low and "update" not in s_low and "ev" not in s_low: score -= 8
+        if "plug in" in s_low or "plug into" in s_low: score -= 8
+        if "sign in" in s_low or "log in" in s_low or "login" in s_low: score -= 6
+        if "approve" in s_low: score -= 7
+        if "authorize" in s_low and "limited" not in s_low: score -= 7
+        if "allow " in s_low: score -= 5
+        if "open the" in s_low and ("attachment" in s_low or "pdf" in s_low or "doc" in s_low or "file" in s_low or "link" in s_low or "zip" in s_low): score -= 8
+        if "pay " in s_low and "fee" in s_low: score -= 7
+        if "wire " in s_low and "money" in s_low: score -= 10
+        if "send " in s_low and ("code" in s_low or "password" in s_low or "info" in s_low or "details" in s_low or "config" in s_low or "money" in s_low): score -= 9
+        if "buy" in s_low and "gift card" in s_low: score -= 10
+        if "scan " in s_low and "report" not in s_low and "official" not in s_low: score -= 6
+        if "provide " in s_low and "info" in s_low: score -= 5
+        if "share " in s_low and ("password" in s_low or "credential" in s_low or "env" in s_low or "token" in s_low): score -= 9
+        if "leave it" in s_low or "leave —" in s_low or "leave -" in s_low: score -= 6
+        if "ignore — " in s_low or "ignore - " in s_low: score -= 4  # "Ignore — X is safe" usually wrong
+        if "trust" in s_low and ("sysadmin" in s_low or "service" in s_low or "vendor" in s_low): score -= 5
+        if "wait " in s_low and ("isp" in s_low or "fix" in s_low or "monday" in s_low): score -= 5
+        if "force-push" in s_low or "force push" in s_low: score -= 4
+
+        return score
+
+    # Find correct option = highest-scoring one
+    correct_index = max(range(len(option_strings)), key=lambda i: safety_score(option_strings[i]))
+
+    # Assign IDs: correct one gets the semantic key; others get placeholder unique ids
+    keyed = []
+    placeholder_counter = 1
+    for i, s in enumerate(option_strings):
+        if i == correct_index:
+            kid = correct_action_key
+        else:
+            kid = f"opt_alt_{placeholder_counter}"
+            placeholder_counter += 1
+        keyed.append({"id": kid, "label": s, "desc": ""})
+
+    return keyed, keyed[correct_index]["id"]
+
+
+def seed_expanded_scenarios():
+    """Load 126 expanded scenarios into the DB, mapping to your existing schema.
+    Idempotent — re-running skips already-seeded entries."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        seeded = 0
+        skipped = 0
+        for s in ALL_SCENARIOS:
+            db_category = SEED_CATEGORY_MAP.get(s["category"])
+            if not db_category:
+                continue
+            db_difficulty = SEED_DIFFICULTY_MAP.get(s["difficulty"], "Medium")
+
+            # Dedup by (subject, category) — same check as your existing seed
+            existing = db.query(Scenario).filter(
+                Scenario.subject == s["subject"],
+                Scenario.category == db_category,
+            ).first()
+            if existing:
+                skipped += 1
+                continue
+
+            options_keyed, correct_id = _seed_to_db_options(s["options"], s["correct_action"])
+
+            scenario = Scenario(
+                category=db_category,
+                type=s["type"],
+                difficulty=db_difficulty,
+                sender_email=s["sender_email"],
+                sender_name=s["sender_name"],
+                subject=s["subject"],
+                body=s["body"],
+                correct_action=correct_id,
+                red_flags=json.dumps([s["red_flags"]]),  # your schema: JSON-encoded list
+                options=json.dumps(options_keyed),       # your schema: JSON-encoded string
+                extra_data=json.dumps(s["extra_data"]) if s.get("extra_data") else None,
+                is_ai_generated=False,
+            )
+            db.add(scenario)
+            seeded += 1
+
+        db.commit()
+        print(f"[expanded-seed] Added {seeded} new scenarios, skipped {skipped} already in DB")
+    except Exception as e:
+        db.rollback()
+        print(f"[expanded-seed] FAILED: {e}")
+    finally:
+        db.close()
+
 
 def shuffle_options(options, correct_action):
     """Shuffle option positions and remap IDs so correct answer is at a random position every time."""
@@ -58,6 +220,7 @@ def shuffle_options(options, correct_action):
 def startup():
     init_db()
     seed_database()
+    seed_expanded_scenarios()
 
 # ── AUTH ──
 @app.post("/api/auth/register", response_model=TokenResponse)
@@ -169,18 +332,24 @@ def submit_response(req: SubmitRequest, db: Session = Depends(get_db), user: Use
     return SubmitResponse(correct=is_correct, correct_action=scenario.correct_action,
         red_flags=json.loads(scenario.red_flags), points_earned=points,
         new_score=user.score, new_streak=user.streak)
-    is_correct = req.action == scenario.correct_action
-    points = POINTS.get(scenario.difficulty, 10) if is_correct else 0
-    response = Response(user_id=user.id, scenario_id=scenario.id, action=req.action,
-        is_correct=is_correct, points_earned=points, time_taken=req.time_taken)
-    db.add(response)
-    user.total_scenarios += 1; user.score += points
-    if is_correct: user.correct_answers += 1; user.streak += 1
-    else: user.streak = 0
-    db.commit(); db.refresh(user)
-    return SubmitResponse(correct=is_correct, correct_action=scenario.correct_action,
-        red_flags=json.loads(scenario.red_flags), points_earned=points,
-        new_score=user.score, new_streak=user.streak)
+
+# ── SCENARIO STATS (debug / verification) ──
+@app.get("/api/scenarios/stats")
+def scenarios_stats(db: Session = Depends(get_db)):
+    """Returns count of scenarios per category and difficulty.
+    Use this after deploy to verify the expanded seed loaded properly."""
+    rows = (
+        db.query(Scenario.category, Scenario.difficulty, func.count(Scenario.id))
+        .filter(Scenario.is_ai_generated == False)
+        .group_by(Scenario.category, Scenario.difficulty)
+        .all()
+    )
+    result = {}
+    for category, difficulty, count in rows:
+        result.setdefault(category, {})[difficulty] = count
+    result["_total_static"] = db.query(Scenario).filter(Scenario.is_ai_generated == False).count()
+    result["_total_all"] = db.query(Scenario).count()
+    return result
 
 # ── LEADERBOARD ──
 @app.get("/api/leaderboard", response_model=list[LeaderboardEntry])
