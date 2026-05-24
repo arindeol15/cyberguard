@@ -75,48 +75,135 @@ def _seed_to_db_options(option_strings, correct_action_key):
         Tuned for the wording used across the 126 seed scenarios."""
         s_low = s.lower()
         score = 0
-        # Strong positive signals (the right thing to do)
-        if "report" in s_low: score += 10
-        if "verify" in s_low: score += 8
-        if "hang up" in s_low: score += 8
-        if "block" in s_low: score += 6
-        if "refuse" in s_low: score += 6
-        if "ignore" in s_low: score += 5
-        if "call " in s_low and "back" in s_low: score += 7
-        if "official" in s_low: score += 6
-        if "directly" in s_low: score += 5
-        if "isolate" in s_low: score += 5
-        if "rotate" in s_low: score += 5
-        if "disable" in s_low: score += 4
-        if "factory reset" in s_low: score += 7
-        if "walk away" in s_low: score += 6
-        if "delete and report" in s_low: score += 10
-        if "both:" in s_low: score += 11  # "Both X AND Y" is often the best answer
-        if "mobile data" in s_low or "mobile hotspot" in s_low: score += 4
-        if "via known" in s_low or "known number" in s_low or "known channel" in s_low: score += 6
+        positive_phrases = {
+            "both:": 14,
+            "delete and report": 14,
+            "report": 12,
+            "verify": 10,
+            "hang up": 10,
+            "known number": 9,
+            "known channel": 9,
+            "call bank back": 9,
+            "call back": 8,
+            "out-of-band": 8,
+            "factory reset": 8,
+            "official": 8,
+            "directly": 8,
+            "security": 8,
+            "block": 7,
+            "refuse": 7,
+            "deny": 7,
+            "walk away": 7,
+            "alert": 7,
+            "revoke": 7,
+            "rotate": 7,
+            "preserve": 7,
+            "quarantine": 7,
+            "sandbox": 7,
+            "isolate": 7,
+            "hand to it": 7,
+            "hand to security": 7,
+            "collect all": 6,
+            "change password": 6,
+            "disable auto": 6,
+            "forget": 6,
+            "mobile data": 6,
+            "mobile hotspot": 6,
+            "cellular": 6,
+            "vpn": 6,
+            "kill switch": 6,
+            "dnssec": 6,
+            "doh": 6,
+            "rpki": 6,
+            "registry lock": 6,
+            "fido2": 6,
+            "sign out": 6,
+            "close the tab": 6,
+            "task manager": 5,
+            "antivirus scan": 5,
+            "run your own av": 5,
+            "paper menu": 5,
+            "ask staff": 5,
+            "ask reception": 5,
+            "linkedin manually": 5,
+            "manually": 5,
+            "data-blocker": 5,
+            "ublock": 5,
+            "minimal reproducer": 5,
+            "team lead": 5,
+            "audit": 5,
+            "private": 5,
+            "ignore": 2,
+        }
+        negative_phrases = {
+            "call the number": -18,
+            "continue": -14,
+            "click": -12,
+            "enter credentials": -12,
+            "enter work credentials": -12,
+            "enter password": -12,
+            "enter card": -12,
+            "enter code": -12,
+            "install": -11,
+            "plug in": -11,
+            "plug into": -11,
+            "approve": -11,
+            "wire money": -11,
+            "buy": -11,
+            "gift card": -11,
+            "share password": -11,
+            "share credentials": -11,
+            "share env": -11,
+            "share token": -11,
+            "send code": -10,
+            "send password": -10,
+            "send config": -10,
+            "pay ": -10,
+            "open the attachment": -10,
+            "open the pdf": -10,
+            "open the doc": -10,
+            "open the file": -10,
+            "open the link": -10,
+            "open the qr": -10,
+            "open the tracking": -10,
+            "authorize": -9,
+            "allow ": -9,
+            "scan the": -9,
+            "scan to": -9,
+            "provide info": -9,
+            "fill out": -9,
+            "reply with": -9,
+            "trust": -8,
+            "leave it": -8,
+            "leave them": -8,
+            "ignore —": -8,
+            "ignore -": -8,
+            "ignore and dismiss": -8,
+            "mute the app": -8,
+            "restart the phone": -7,
+            "restart the computer": -7,
+            "wait for": -7,
+            "sign in": -7,
+            "log in": -7,
+            "login": -7,
+            "force-push": -6,
+            "force push": -6,
+        }
 
-        # Strong negative signals (the unsafe action)
-        if "click " in s_low and "report" not in s_low: score -= 10
-        if "enter " in s_low and ("credential" in s_low or "password" in s_low or "card" in s_low or "code" in s_low or "info" in s_low or "otp" in s_low or "ssn" in s_low or "details" in s_low): score -= 10
-        if "install" in s_low and "update" not in s_low and "ev" not in s_low: score -= 8
-        if "plug in" in s_low or "plug into" in s_low: score -= 8
-        if "sign in" in s_low or "log in" in s_low or "login" in s_low: score -= 6
-        if "approve" in s_low: score -= 7
-        if "authorize" in s_low and "limited" not in s_low: score -= 7
-        if "allow " in s_low: score -= 5
-        if "open the" in s_low and ("attachment" in s_low or "pdf" in s_low or "doc" in s_low or "file" in s_low or "link" in s_low or "zip" in s_low): score -= 8
-        if "pay " in s_low and "fee" in s_low: score -= 7
-        if "wire " in s_low and "money" in s_low: score -= 10
-        if "send " in s_low and ("code" in s_low or "password" in s_low or "info" in s_low or "details" in s_low or "config" in s_low or "money" in s_low): score -= 9
-        if "buy" in s_low and "gift card" in s_low: score -= 10
-        if "scan " in s_low and "report" not in s_low and "official" not in s_low: score -= 6
-        if "provide " in s_low and "info" in s_low: score -= 5
-        if "share " in s_low and ("password" in s_low or "credential" in s_low or "env" in s_low or "token" in s_low): score -= 9
-        if "leave it" in s_low or "leave —" in s_low or "leave -" in s_low: score -= 6
-        if "ignore — " in s_low or "ignore - " in s_low: score -= 4  # "Ignore — X is safe" usually wrong
-        if "trust" in s_low and ("sysadmin" in s_low or "service" in s_low or "vendor" in s_low): score -= 5
-        if "wait " in s_low and ("isp" in s_low or "fix" in s_low or "monday" in s_low): score -= 5
-        if "force-push" in s_low or "force push" in s_low: score -= 4
+        for phrase, weight in positive_phrases.items():
+            if phrase in s_low:
+                score += weight
+        for phrase, weight in negative_phrases.items():
+            if phrase in s_low:
+                score += weight
+
+        # Direct navigation to the real service is safe, unlike credential entry
+        # on a linked page. Give it back the points removed by generic login terms.
+        if "directly" in s_low or "official" in s_low or "known" in s_low:
+            if "sign in" in s_low or "log in" in s_low or "login" in s_low:
+                score += 7
+        if "limited scopes" in s_low or "marketplace" in s_low:
+            score += 3
 
         return score
 
