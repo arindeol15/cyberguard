@@ -5,6 +5,7 @@ import SimulationAudioPlayer from './SimulationAudioPlayer';
 import InteractiveCorePanel from './InteractiveCoreModules';
 import { getScenarioCallerIdentity, sanitizeCallerText } from './callerIdentity';
 import { afterActionDepth, decisionAxis, getRangeIntel } from './rangeIntel';
+import { withUrlVariants } from './urlVariants';
 
 const DIFF = {
   Easy: { bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.3)', color: '#22c55e', pts: 10 },
@@ -656,15 +657,16 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
     </div>
   );
 
-  const websiteExtra = category === 'website' ? normalizeWebsiteExtra(scenario.extra_data || {}) : null;
+  const scenarioView = withUrlVariants(scenario, category);
+  const websiteExtra = category === 'website' ? normalizeWebsiteExtra(scenarioView.extra_data || {}) : null;
   const callIdentity = ['vishing', 'deepfake'].includes(category)
-    ? getScenarioCallerIdentity(scenario, scenario.extra_data || {}, category)
+    ? getScenarioCallerIdentity(scenarioView, scenarioView.extra_data || {}, category)
     : null;
-  const displayedBody = callScenarioIntro(category, scenario, callIdentity);
-  const rangeIntel = getRangeIntel({ category, scenario, identity: callIdentity });
+  const displayedBody = callScenarioIntro(category, scenarioView, callIdentity);
+  const rangeIntel = getRangeIntel({ category, scenario: scenarioView, identity: callIdentity });
 
   if (result) return (
-    <ResultView result={result} scenario={scenario} category={category} catInfo={catInfo} intel={rangeIntel} onNext={load} onHome={() => setPage('home')} />
+    <ResultView result={result} scenario={scenarioView} category={category} catInfo={catInfo} intel={rangeIntel} onNext={load} onHome={() => setPage('home')} />
   );
 
   // Scenario view
@@ -681,15 +683,15 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         </div>
         <div style={{
           padding: '6px 12px', borderRadius: 8,
-          background: DIFF[scenario.difficulty]?.bg,
-          border: `1px solid ${DIFF[scenario.difficulty]?.border}`,
-          color: DIFF[scenario.difficulty]?.color, fontSize: 12, fontWeight: 600,
-        }}>{scenario.difficulty}</div>
+          background: DIFF[scenarioView.difficulty]?.bg,
+          border: `1px solid ${DIFF[scenarioView.difficulty]?.border}`,
+          color: DIFF[scenarioView.difficulty]?.color, fontSize: 12, fontWeight: 600,
+        }}>{scenarioView.difficulty}</div>
         <div style={{
           padding: '6px 12px', borderRadius: 8,
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           color: 'var(--text-muted)', fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
-        }}>{scenario.type}</div>
+        }}>{scenarioView.type}</div>
         <button onClick={() => setPage('home')} style={{
           marginLeft: 'auto', padding: '6px 12px', borderRadius: 8,
           border: '1px solid var(--border)', background: 'transparent',
@@ -707,20 +709,20 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         <div style={{ padding: 24, borderBottom: '1px solid var(--border)', position: 'relative' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${catInfo.color}, transparent)` }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
-            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{scenario.subject}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{scenarioView.subject}</div>
             <div style={{ fontSize: 10, color: catInfo.color, fontWeight: 900, fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>{rangeIntel.caseId}</div>
           </div>
-          {scenario.sender_name && (
+          {scenarioView.sender_name && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 width: 38, height: 38, borderRadius: '50%',
                 background: 'linear-gradient(135deg, #ef4444, #dc2626)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 14, fontWeight: 700, color: '#fff',
-              }}>{scenario.sender_name?.charAt(0)}</div>
+              }}>{scenarioView.sender_name?.charAt(0)}</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{scenario.sender_name}</div>
-                {scenario.sender_email && <div style={{ fontSize: 12, color: '#ef4444', fontFamily: "'JetBrains Mono', monospace" }}>{scenario.sender_email}</div>}
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{scenarioView.sender_name}</div>
+                {scenarioView.sender_email && <div style={{ fontSize: 12, color: '#ef4444', fontFamily: "'JetBrains Mono', monospace" }}>{scenarioView.sender_email}</div>}
               </div>
             </div>
           )}
@@ -746,51 +748,51 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
                 This scenario uses a popup or overlay instead of a normal URL, so the simulator is showing a safe reconstructed browser view.
               </div>
             )}
-            <FakeBrowser fakeUrl={websiteExtra.fakeUrl} realUrl={websiteExtra.realUrl} ssl={websiteExtra.sslValid} subject={scenario.subject} />
+            <FakeBrowser fakeUrl={websiteExtra.fakeUrl} realUrl={websiteExtra.realUrl} ssl={websiteExtra.sslValid} subject={scenarioView.subject} />
           </div>
         )}
 
-        {scenario.extra_data && category === 'vishing' && (
+        {scenarioView.extra_data && category === 'vishing' && (
           <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>CALL DETAILS</div>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
               <VishingPlayer
-                transcript={scenario.body}
-                difficulty={scenario.difficulty}
-                extraData={scenario.extra_data}
+                transcript={scenarioView.body}
+                difficulty={scenarioView.difficulty}
+                extraData={scenarioView.extra_data}
                 callerIdentity={callIdentity}
               />
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
-                <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenario.extra_data.caller_id || 'Unknown caller ID'}</span></div>
-                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenario.extra_data.claimed_organization || callIdentity?.org || 'Unverified organization'}</strong></div>
-                <div>Tactics: <span style={{ color: '#f59e0b' }}>{Array.isArray(scenario.extra_data.tactics_used) ? scenario.extra_data.tactics_used.join(', ') : 'urgency, authority'}</span></div>
-                <div>Wants: <span style={{ color: '#ef4444' }}>{Array.isArray(scenario.extra_data.info_requested) ? scenario.extra_data.info_requested.join(', ') : 'credentials or payment action'}</span></div>
+                <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenarioView.extra_data.caller_id || 'Unknown caller ID'}</span></div>
+                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenarioView.extra_data.claimed_organization || callIdentity?.org || 'Unverified organization'}</strong></div>
+                <div>Tactics: <span style={{ color: '#f59e0b' }}>{Array.isArray(scenarioView.extra_data.tactics_used) ? scenarioView.extra_data.tactics_used.join(', ') : 'urgency, authority'}</span></div>
+                <div>Wants: <span style={{ color: '#ef4444' }}>{Array.isArray(scenarioView.extra_data.info_requested) ? scenarioView.extra_data.info_requested.join(', ') : 'credentials or payment action'}</span></div>
               </div>
             </div>
           </div>
         )}
 
-        {scenario.extra_data && category === 'usb' && (
+        {scenarioView.extra_data && category === 'usb' && (
           <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>USB METADATA</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-              <div>Found at: <strong style={{ color: 'var(--text-primary)' }}>{scenario.extra_data.found_location}</strong></div>
-              <div>Appearance: {scenario.extra_data.usb_appearance}</div>
-              <div>Label: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>"{scenario.extra_data.usb_label}"</span></div>
-              {scenario.extra_data.files_if_opened && <div>Files visible: {scenario.extra_data.files_if_opened.join(', ')}</div>}
+              <div>Found at: <strong style={{ color: 'var(--text-primary)' }}>{scenarioView.extra_data.found_location}</strong></div>
+              <div>Appearance: {scenarioView.extra_data.usb_appearance}</div>
+              <div>Label: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>"{scenarioView.extra_data.usb_label}"</span></div>
+              {scenarioView.extra_data.files_if_opened && <div>Files visible: {scenarioView.extra_data.files_if_opened.join(', ')}</div>}
             </div>
           </div>
         )}
 
-        <InteractiveCorePanel category={category} scenario={scenario} selected={selected} setSelected={setSelected} />
-        <AdvancedScenarioPanel category={category} scenario={scenario} selected={selected} setSelected={setSelected} />
+        <InteractiveCorePanel category={category} scenario={scenarioView} selected={selected} setSelected={setSelected} />
+        <AdvancedScenarioPanel category={category} scenario={scenarioView} selected={selected} setSelected={setSelected} />
       </div>
 
       {/* Actions */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '1.5px', marginBottom: 12 }}>SELECT YOUR RESPONSE</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {(scenario.options || []).map((a, i) => (
+          {(scenarioView.options || []).map((a, i) => (
             <button key={a.id} onClick={() => setSelected(a.id)} style={{
               padding: 16, borderRadius: 12, textAlign: 'left', fontFamily: 'inherit',
               border: selected === a.id ? `1px solid ${catInfo.color}` : '1px solid var(--border)',
