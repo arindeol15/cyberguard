@@ -4,6 +4,7 @@ import { ADVANCED_CATEGORIES, AdvancedScenarioPanel, IncidentResponseMode, SOCDa
 import SimulationAudioPlayer from './SimulationAudioPlayer';
 import InteractiveCorePanel from './InteractiveCoreModules';
 import { getScenarioCallerIdentity, sanitizeCallerText } from './callerIdentity';
+import { afterActionDepth, decisionAxis, getRangeIntel } from './rangeIntel';
 
 const DIFF = {
   Easy: { bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.3)', color: '#22c55e', pts: 10 },
@@ -274,6 +275,18 @@ function AuthPage({ onAuth, error, setError }) {
 // ── HOME ──
 function HomePage({ user, setPage, difficulty, setDifficulty, category, setCategory, useAi, setUseAi }) {
   const acc = user?.total_scenarios > 0 ? Math.round((user.correct_answers / user.total_scenarios) * 100) : 0;
+  const selectedInfo = CATEGORIES.find(c => c.id === category) || CATEGORIES[0];
+  const channelIntel = getRangeIntel({
+    category,
+    scenario: {
+      id: category,
+      type: selectedInfo.label,
+      difficulty,
+      subject: `${selectedInfo.label} readiness drill`,
+      body: selectedInfo.desc,
+      extra_data: {},
+    },
+  });
 
   return (
     <>
@@ -336,6 +349,8 @@ function HomePage({ user, setPage, difficulty, setDifficulty, category, setCateg
           ))}
         </div>
       </div>
+
+      <RangeChannelProfile intel={channelIntel} color={selectedInfo.color} useAi={useAi} />
 
       {/* Mission config */}
       <div style={{
@@ -418,6 +433,120 @@ function safeUrlInfo(rawUrl, fallback = 'https://suspicious-site.example/login')
       valid: false,
     };
   }
+}
+
+function RangeChannelProfile({ intel, color, useAi }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, rgba(13,20,36,0.94), rgba(5,8,16,0.78))',
+      border: '1px solid var(--border)',
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 18,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.5px', fontWeight: 800, marginBottom: 5 }}>RANGE PROFILE</div>
+          <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 900 }}>{intel.role}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Badge label={intel.severity} color={color} />
+          <Badge label={useAi ? 'AI scenario source' : 'Prebuilt scenario source'} color={useAi ? '#22d3ee' : '#a78bfa'} />
+          <Badge label={intel.pace} color="#f59e0b" />
+        </div>
+      </div>
+      <div style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>{intel.objective}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+        {[
+          ['Environment', intel.environment],
+          ['Adversary', intel.adversary],
+          ['Business Impact', intel.impact],
+          ['Primary Evidence', intel.artifacts.slice(0, 3).join(', ')],
+        ].map(([label, value]) => <MiniSignal key={label} label={label} value={value} color={color} />)}
+      </div>
+    </div>
+  );
+}
+
+function Badge({ label, color }) {
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      minHeight: 24,
+      padding: '5px 9px',
+      borderRadius: 8,
+      border: `1px solid ${color}55`,
+      background: `${color}14`,
+      color,
+      fontSize: 10,
+      fontWeight: 900,
+      letterSpacing: '0.4px',
+      textTransform: 'uppercase',
+    }}>{label}</span>
+  );
+}
+
+function MiniSignal({ label, value, color = 'var(--accent-cyan)' }) {
+  return (
+    <div style={{ background: 'rgba(5,8,16,0.42)', border: '1px solid var(--border)', borderRadius: 10, padding: 11, minHeight: 72 }}>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 5 }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize: 12, color, fontWeight: 800, lineHeight: 1.45 }}>{value}</div>
+    </div>
+  );
+}
+
+function RangeBriefing({ intel, color }) {
+  return (
+    <div style={{
+      background: 'rgba(13,20,36,0.86)',
+      border: '1px solid var(--border)',
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 16,
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <div style={{ position: 'absolute', inset: '0 0 auto 0', height: 2, background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, alignItems: 'start' }}>
+        <div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+            <Badge label={intel.caseId} color={color} />
+            <Badge label={intel.severity} color={intel.severity === 'Critical' ? '#ef4444' : color} />
+            <Badge label={`${intel.confidence}% confidence`} color="#22d3ee" />
+          </div>
+          <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 900, marginBottom: 6 }}>{intel.analystPrompt}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{intel.impact}</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <MiniSignal label="Environment" value={intel.environment} color={color} />
+          <MiniSignal label="Noise" value={intel.noise} color="#f59e0b" />
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14, marginTop: 14 }}>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.2px', fontWeight: 900, marginBottom: 8 }}>EVIDENCE QUEUE</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+            {intel.evidence.map(item => <MiniSignal key={`${item.label}-${item.value}`} label={item.label} value={item.value} color="var(--text-secondary)" />)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.2px', fontWeight: 900, marginBottom: 8 }}>INVESTIGATION PLAYBOOK</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {intel.playbook.slice(0, 4).map((step, i) => (
+              <div key={step} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.45 }}>
+                <span style={{ color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900 }}>{String(i + 1).padStart(2, '0')}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+            {intel.techniques.map(t => <Badge key={t} label={t} color="#a78bfa" />)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function normalizeWebsiteExtra(extra = {}) {
@@ -532,9 +661,10 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
     ? getScenarioCallerIdentity(scenario, scenario.extra_data || {}, category)
     : null;
   const displayedBody = callScenarioIntro(category, scenario, callIdentity);
+  const rangeIntel = getRangeIntel({ category, scenario, identity: callIdentity });
 
   if (result) return (
-    <ResultView result={result} scenario={scenario} category={category} catInfo={catInfo} onNext={load} onHome={() => setPage('home')} />
+    <ResultView result={result} scenario={scenario} category={category} catInfo={catInfo} intel={rangeIntel} onNext={load} onHome={() => setPage('home')} />
   );
 
   // Scenario view
@@ -567,6 +697,8 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         }}>← Abort</button>
       </div>
 
+      <RangeBriefing intel={rangeIntel} color={catInfo.color} />
+
       {/* Main scenario card */}
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -574,7 +706,10 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
       }}>
         <div style={{ padding: 24, borderBottom: '1px solid var(--border)', position: 'relative' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${catInfo.color}, transparent)` }} />
-          <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>{scenario.subject}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{scenario.subject}</div>
+            <div style={{ fontSize: 10, color: catInfo.color, fontWeight: 900, fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>{rangeIntel.caseId}</div>
+          </div>
           {scenario.sender_name && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
@@ -667,6 +802,9 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
               )}
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{a.label}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.desc}</div>
+              <div style={{ marginTop: 9, display: 'inline-flex', padding: '4px 7px', borderRadius: 7, background: 'rgba(148,163,184,0.08)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10, fontWeight: 800, letterSpacing: '0.4px' }}>
+                Decision axis: {decisionAxis(a)}
+              </div>
             </button>
           ))}
         </div>
@@ -694,7 +832,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
 }
 
 // ── RESULT VIEW ──
-function ResultMetrics({ result, scenario, category, catInfo }) {
+function ResultMetrics({ result, scenario, category, catInfo, intel }) {
   const flags = result.red_flags || [];
   const responseTime = result.response_time || 0;
   const difficultyWeight = { Easy: 10, Medium: 18, Hard: 26 }[scenario?.difficulty] || 18;
@@ -705,7 +843,7 @@ function ResultMetrics({ result, scenario, category, catInfo }) {
   const accuracy = result.correct ? 100 : 35;
   const awareness = Math.round((suspicionScore + detectionRate + accuracy + (100 - riskScore)) / 4);
   const heat = Array.from({ length: 28 }, (_, i) => (i * 17 + riskScore + suspicionScore) % 100);
-  const techniques = {
+  const techniques = intel?.techniques || {
     email: ['sender spoofing', 'urgency', 'credential harvesting'],
     website: ['domain impersonation', 'certificate confusion', 'fake login'],
     qr: ['quishing', 'redirect abuse', 'mobile trust gap'],
@@ -734,6 +872,7 @@ function ResultMetrics({ result, scenario, category, catInfo }) {
   const recommendations = result.correct
     ? ['Practice a harder variation', 'Continue out-of-band verification', 'Document evidence before closing the incident']
     : ['Slow down and inspect identity, domain, and requested action', 'Use official channels rather than embedded prompts', 'Report early when urgency or secrecy appears'];
+  const aar = intel ? afterActionDepth({ result, intel }) : null;
 
   return (
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 22, marginBottom: 16 }}>
@@ -758,6 +897,27 @@ function ResultMetrics({ result, scenario, category, catInfo }) {
           </div>
         ))}
       </div>
+      {aar && (
+        <div style={{ marginBottom: 18, padding: 14, borderRadius: 12, border: `1px solid ${result.correct ? 'rgba(34,197,94,0.28)' : 'rgba(239,68,68,0.35)'}`, background: result.correct ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 900 }}>{aar.title}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>{intel.caseId}</div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.65, marginBottom: 10 }}>{aar.summary}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1px', fontWeight: 900, marginBottom: 6 }}>NEXT RESPONSE ACTIONS</div>
+              {aar.nextActions.map(action => <div key={action} style={{ fontSize: 12, color: result.correct ? '#bbf7d0' : '#fecaca', marginBottom: 5 }}>{action}</div>)}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1px', fontWeight: 900, marginBottom: 6 }}>PRESSURE INDICATORS</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {intel.pressure.map(p => <Badge key={p} label={p} color={result.correct ? '#22c55e' : '#f59e0b'} />)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
         <div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, marginBottom: 8 }}>STRENGTHS</div>
@@ -788,7 +948,7 @@ function ResultMetrics({ result, scenario, category, catInfo }) {
   );
 }
 
-function ResultView({ result, scenario, category, catInfo, onNext, onHome }) {
+function ResultView({ result, scenario, category, catInfo, intel, onNext, onHome }) {
   return (
     <div style={{ animation: 'fadeInUp 0.4s' }}>
       <div style={{
@@ -817,7 +977,7 @@ function ResultView({ result, scenario, category, catInfo, onNext, onHome }) {
         )}
       </div>
 
-      <ResultMetrics result={result} scenario={scenario} category={category} catInfo={catInfo} />
+      <ResultMetrics result={result} scenario={scenario} category={category} catInfo={catInfo} intel={intel} />
 
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border)',
