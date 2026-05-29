@@ -598,7 +598,12 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
           <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>CALL DETAILS</div>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <VishingPlayer transcript={scenario.body} callerName={scenario.extra_data.caller_name || scenario.subject} />
+              <VishingPlayer
+                transcript={scenario.body}
+                callerName={scenario.extra_data.caller_name || scenario.subject}
+                difficulty={scenario.difficulty}
+                extraData={scenario.extra_data}
+              />
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
                 <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenario.extra_data.caller_id || 'Unknown caller ID'}</span></div>
                 <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenario.extra_data.claimed_organization || 'Unverified organization'}</strong></div>
@@ -1219,29 +1224,60 @@ function QRCode({ url }) {
 }
 
 // ── VISHING PLAYER ──
-function VishingPlayer({ transcript, callerName }) {
-  const extractLines = (text) => {
-    const source = text || '';
-    const quoted = source.match(/["']([^"']{20,240})["']/);
+function VishingPlayer({ transcript, callerName, difficulty = 'Medium', extraData = {} }) {
+  const difficultyKey = String(difficulty || '').toLowerCase();
+  const extractRequest = (source) => {
+    const quoted = source.match(/["']([^"']{20,260})["']/);
     if (quoted?.[1]) return quoted[1].trim();
+    const request = source
+      .replace(/\s+/g, ' ')
+      .split(/(?<=[.!?])\s+/)
+      .find(s => /(verify|confirm|approve|send|wire|password|code|download|install|card|account|urgent|payment|access)/i.test(s));
+    return request || source.replace(/\s+/g, ' ').slice(0, 220);
+  };
 
+  const buildCallScript = (text) => {
+    if (extraData.call_script) {
+      return Array.isArray(extraData.call_script) ? extraData.call_script.join('\n') : String(extraData.call_script);
+    }
+    const source = text || '';
     const callerLines = source
       .split('\n')
       .filter(l => /^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i.test(l))
       .map(l => l.replace(/^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i, '').trim())
       .filter(Boolean)
-      .slice(0, 4)
-      .join('. ');
-    if (callerLines) return callerLines;
+      .slice(0, 7);
+    if (callerLines.length >= 3) return callerLines.join('\n');
 
-    const sentences = source
-      .replace(/\s+/g, ' ')
-      .split(/(?<=[.!?])\s+/)
-      .filter(s => /(need|verify|confirm|approve|send|wire|password|code|urgent|account|access)/i.test(s))
-      .slice(0, 2)
-      .join(' ');
-    return sentences || source.slice(0, 220);
+    const org = extraData.claimed_organization || callerName || 'account security';
+    const wants = Array.isArray(extraData.info_requested) && extraData.info_requested.length
+      ? extraData.info_requested.join(', ')
+      : 'verification details';
+    const request = extractRequest(source);
+    const pressureLine = difficultyKey === 'hard'
+      ? 'I know this is unusual, but I am already on the incident bridge and we cannot delay the approval window.'
+      : difficultyKey === 'easy'
+        ? 'This is time sensitive, and I need you to help me finish it right now.'
+        : 'I can stay on the line while you complete it, but we need to move quickly.';
+
+    return [
+      `Hi, this is ${org}. Am I speaking with the account holder?`,
+      request,
+      pressureLine,
+      `For security, I need you to provide ${wants} before I can release the hold.`,
+      'Please do not hang up or call the main number, because that will restart the case.',
+      'Tell me once you have completed it so I can close the alert on my side.',
+    ].join('\n');
   };
+
+  const voiceProfile = /ceo|cfo|manager|executive|vendor/i.test(`${callerName} ${extraData.claimed_organization || ''}`)
+    ? 'executive'
+    : /support|help|microsoft|bank|fraud/i.test(`${callerName} ${extraData.claimed_organization || ''}`)
+      ? 'support'
+      : 'caller';
+  const rate = difficultyKey === 'hard' ? 0.86 : difficultyKey === 'easy' ? 0.95 : 0.9;
+  const pitch = difficultyKey === 'hard' ? 0.78 : difficultyKey === 'easy' ? 1.02 : 0.9;
+  const callScript = buildCallScript(transcript);
 
   return (
     <div style={{
@@ -1258,10 +1294,12 @@ function VishingPlayer({ transcript, callerName }) {
       </div>
       <SimulationAudioPlayer
         title="Caller Audio"
-        subtitle="Answer, pause, replay, or inspect transcript"
-        transcript={extractLines(transcript)}
+        subtitle={`${difficulty || 'Medium'} call simulation`}
+        transcript={callScript}
         accent="#22c55e"
-        voiceHint="male"
+        voiceHint={voiceProfile}
+        rate={rate}
+        pitch={pitch}
       />
     </div>
   );

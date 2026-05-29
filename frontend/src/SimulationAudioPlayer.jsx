@@ -15,13 +15,25 @@ const controlButton = {
 function getSpeechVoice(voices, voiceHint) {
   if (!voices?.length) return null;
   const hint = (voiceHint || '').toLowerCase();
+  const englishVoices = voices.filter(v => /^en[-_]/i.test(v.lang));
+  const profiles = {
+    female: /zira|susan|samantha|victoria|karen|aria|jenny|female/i,
+    male: /david|daniel|guy|mark|alex|george|ryan|male/i,
+    executive: /guy|daniel|david|mark|alex|george|ryan/i,
+    support: /zira|jenny|aria|susan|samantha|karen/i,
+    caller: /david|zira|guy|jenny|aria|alex|samantha/i,
+  };
+  if (hint && profiles[hint]) {
+    const profiled = englishVoices.find(v => profiles[hint].test(v.name)) || voices.find(v => profiles[hint].test(v.name));
+    if (profiled) return profiled;
+  }
   if (hint) {
     const hinted = voices.find(v => `${v.name} ${v.lang}`.toLowerCase().includes(hint));
     if (hinted) return hinted;
   }
   return (
-    voices.find(v => /david|daniel|guy|male|mark|alex/i.test(v.name)) ||
-    voices.find(v => /en-/i.test(v.lang)) ||
+    englishVoices.find(v => /david|daniel|guy|male|mark|alex/i.test(v.name)) ||
+    englishVoices[0] ||
     voices[0]
   );
 }
@@ -32,6 +44,8 @@ export default function SimulationAudioPlayer({
   transcript = '',
   audioSrc = '',
   voiceHint = '',
+  rate = 0.92,
+  pitch = 0.86,
   accent = '#22c55e',
 }) {
   const audioRef = useRef(null);
@@ -40,6 +54,8 @@ export default function SimulationAudioPlayer({
   const startedAtRef = useRef(0);
   const pausedAtRef = useRef(0);
   const durationRef = useRef(1);
+  const playRunRef = useRef(0);
+  const expectedCancelRef = useRef(false);
   const [mode, setMode] = useState(audioSrc ? 'file' : 'speech');
   const [status, setStatus] = useState('idle');
   const [progress, setProgress] = useState(0);
@@ -70,7 +86,10 @@ export default function SimulationAudioPlayer({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (utteranceRef.current && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (utteranceRef.current && 'speechSynthesis' in window) {
+        expectedCancelRef.current = true;
+        window.speechSynthesis.cancel();
+      }
       if (audioRef.current) audioRef.current.pause();
     };
   }, []);
@@ -129,7 +148,14 @@ export default function SimulationAudioPlayer({
       return;
     }
 
-    window.speechSynthesis.cancel();
+    const runId = Date.now();
+    playRunRef.current = runId;
+    if (window.speechSynthesis.speaking || window.speechSynthesis.paused) {
+      expectedCancelRef.current = true;
+      window.speechSynthesis.cancel();
+      await new Promise(resolve => window.setTimeout(resolve, 140));
+      expectedCancelRef.current = false;
+    }
     setStatus(voicesReady ? 'playing' : 'buffering');
     setProgress(0);
     pausedAtRef.current = 0;
@@ -138,29 +164,34 @@ export default function SimulationAudioPlayer({
     const voices = window.speechSynthesis.getVoices();
     const voice = getSpeechVoice(voices, voiceHint);
     if (voice) utterance.voice = voice;
-    utterance.rate = mode === 'speech' ? 0.92 : 1;
-    utterance.pitch = 0.82;
+    utterance.rate = rate;
+    utterance.pitch = pitch;
     utterance.volume = volume;
     utterance.onstart = () => {
+      if (playRunRef.current !== runId) return;
       setStatus('playing');
       startSpeechProgress(text);
     };
     utterance.onpause = () => {
+      if (playRunRef.current !== runId) return;
       setStatus('paused');
       pausedAtRef.current = Math.min(durationRef.current, (Date.now() - startedAtRef.current) / 1000);
       clearTimer();
     };
     utterance.onresume = () => {
+      if (playRunRef.current !== runId) return;
       setStatus('playing');
       startSpeechProgress(text);
     };
     utterance.onend = () => {
+      if (playRunRef.current !== runId) return;
       clearTimer();
       pausedAtRef.current = 0;
       setProgress(100);
       setStatus('ended');
     };
     utterance.onerror = (event) => {
+      if (expectedCancelRef.current || playRunRef.current !== runId || event.error === 'interrupted') return;
       clearTimer();
       setError(`Playback failed: ${event.error || 'speech synthesis error'}. Transcript is available below.`);
       setStatus('error');
@@ -209,6 +240,7 @@ export default function SimulationAudioPlayer({
     clearTimer();
     setProgress(0);
     pausedAtRef.current = 0;
+    setError('');
     if (mode === 'file' && audioRef.current && audioSrc) {
       audioRef.current.currentTime = 0;
       await playFile();
@@ -220,7 +252,12 @@ export default function SimulationAudioPlayer({
   const stop = () => {
     clearTimer();
     if (mode === 'file' && audioRef.current) audioRef.current.pause();
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if ('speechSynthesis' in window) {
+      playRunRef.current += 1;
+      expectedCancelRef.current = true;
+      window.speechSynthesis.cancel();
+      window.setTimeout(() => { expectedCancelRef.current = false; }, 120);
+    }
     pausedAtRef.current = 0;
     setStatus('idle');
     setProgress(0);
