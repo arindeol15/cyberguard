@@ -26,6 +26,7 @@ CATEGORY_IDS = [
     "email", "website", "qr", "vishing", "usb",
     "chat", "attachment", "browser_exploit", "mfa", "cloud",
     "insider", "wifi", "dns", "deepfake", "attack_chain",
+    "smishing", "bec", "supply_chain",
 ]
 
 # ── EXPANDED SEED ADAPTER ──
@@ -345,29 +346,31 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
     used_types = [s.type for s in used_scenarios]
     used_subjects = [s.subject for s in used_scenarios]
 
+    def persist_generated_scenario(ai_result):
+        options = ai_result.get("options", DEFAULT_OPTIONS)
+        correct_id = ai_result.get("correct_id", "opt1")
+        options, correct_id = shuffle_options(options, correct_id)
+        extra = ai_result.get("extra_data", None)
+        scenario = Scenario(
+            category=category, type=ai_result.get("type", "Phishing"), difficulty=difficulty,
+            sender_email=ai_result.get("from"), sender_name=ai_result.get("sender"),
+            subject=ai_result.get("subject", "No subject"), body=ai_result.get("body", ""),
+            correct_action=correct_id,
+            red_flags=json.dumps(ai_result.get("flags", [])),
+            options=json.dumps(options),
+            extra_data=json.dumps(extra) if extra else None,
+            is_ai_generated=True,
+        )
+        db.add(scenario); db.commit(); db.refresh(scenario)
+        return {"id": scenario.id, "category": category, "type": scenario.type, "difficulty": difficulty,
+            "sender_email": scenario.sender_email, "sender_name": scenario.sender_name,
+            "subject": scenario.subject, "body": scenario.body, "options": options,
+            "extra_data": extra}
+
     if req.use_ai:
         ai_result = await generate_ai_scenario(category, difficulty, used_types, used_subjects)
         if ai_result:
-            options = ai_result.get("options", DEFAULT_OPTIONS)
-            correct_id = ai_result.get("correct_id", "opt1")
-            # Shuffle options and remap correct answer
-            options, correct_id = shuffle_options(options, correct_id)
-            extra = ai_result.get("extra_data", None)
-            scenario = Scenario(
-                category=category, type=ai_result.get("type", "Phishing"), difficulty=difficulty,
-                sender_email=ai_result.get("from"), sender_name=ai_result.get("sender"),
-                subject=ai_result.get("subject", "No subject"), body=ai_result.get("body", ""),
-                correct_action=correct_id,
-                red_flags=json.dumps(ai_result.get("flags", [])),
-                options=json.dumps(options),
-                extra_data=json.dumps(extra) if extra else None,
-                is_ai_generated=True,
-            )
-            db.add(scenario); db.commit(); db.refresh(scenario)
-            return {"id": scenario.id, "category": category, "type": scenario.type, "difficulty": difficulty,
-                "sender_email": scenario.sender_email, "sender_name": scenario.sender_name,
-                "subject": scenario.subject, "body": scenario.body, "options": options,
-                "extra_data": extra}
+            return persist_generated_scenario(ai_result)
 
     # Static fallback
     unseen = db.query(Scenario).filter(Scenario.category == category, Scenario.difficulty == difficulty,
@@ -375,6 +378,9 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
     if not unseen:
         unseen = db.query(Scenario).filter(Scenario.category == category, Scenario.is_ai_generated == False).all()
     if not unseen:
+        ai_result = await generate_ai_scenario(category, difficulty, used_types, used_subjects)
+        if ai_result:
+            return persist_generated_scenario(ai_result)
         unseen = db.query(Scenario).filter(Scenario.is_ai_generated == False).all()
     if not unseen:
         raise HTTPException(404, "No scenarios available")

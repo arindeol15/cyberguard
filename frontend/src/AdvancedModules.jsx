@@ -13,6 +13,9 @@ export const ADVANCED_CATEGORIES = [
   { id: 'dns', label: 'DNS Spoofing', icon: 'DN', desc: 'Pharming redirects', color: '#ef4444' },
   { id: 'deepfake', label: 'AI Scam', icon: 'AI', desc: 'Deepfake impersonation', color: '#ec4899' },
   { id: 'attack_chain', label: 'Attack Chain', icon: 'AC', desc: 'Connected kill chain', color: '#06b6d4' },
+  { id: 'smishing', label: 'SMS Phishing', icon: 'SM', desc: 'Text message traps', color: '#10b981' },
+  { id: 'bec', label: 'BEC Fraud', icon: 'BE', desc: 'Invoice and wire scams', color: '#f43f5e' },
+  { id: 'supply_chain', label: 'Supply Chain', icon: 'SC', desc: 'Vendor update attacks', color: '#84cc16' },
 ];
 
 const panelStyle = {
@@ -95,6 +98,9 @@ export function AdvancedScenarioPanel({ category, scenario, selected, setSelecte
   if (category === 'dns') return <DNSSpoofingSimulator {...common} />;
   if (category === 'deepfake') return <DeepfakeScamSimulator {...common} />;
   if (category === 'attack_chain') return <AttackChainSimulator {...common} />;
+  if (category === 'smishing') return <SmishingSimulator {...common} />;
+  if (category === 'bec') return <BECSimulator {...common} />;
+  if (category === 'supply_chain') return <SupplyChainSimulator {...common} />;
   return null;
 }
 
@@ -740,6 +746,132 @@ function AttackChainSimulator({ scenario, setSelected }) {
               <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['contain', 'isolate', 'revoke', 'report'])} tone="good">Select Containment Response</SmallButton>
             </>
           )}
+        </div>
+      </div>
+    </PanelShell>
+  );
+}
+
+function SmishingSimulator({ scenario, setSelected }) {
+  const data = scenario.extra_data || {};
+  const [inspect, setInspect] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const sender = data.sender_number || data.phone || '+1 844 219 7781';
+  const link = data.short_url || data.url || 'https://parcel-help.example/track';
+  const message = data.message || scenario.body || 'Your delivery is paused. Pay the small customs fee now to release it today.';
+
+  return (
+    <PanelShell label="SMS PHISHING PHONE">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+        <div style={{ borderRadius: 28, padding: 14, background: '#020617', border: '1px solid rgba(148,163,184,0.25)' }}>
+          <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginBottom: 12 }}>Messages</div>
+          <div style={{ minHeight: 330, borderRadius: 22, background: '#f8fafc', color: '#111827', padding: 16 }}>
+            <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginBottom: 18 }}>{sender}</div>
+            <div style={{ padding: 13, borderRadius: '16px 16px 16px 4px', background: '#e2e8f0', fontSize: 13, lineHeight: 1.5 }}>{message}</div>
+            <button onClick={() => setOpened(true)} style={{ marginTop: 10, padding: '9px 12px', borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff', color: '#2563eb', fontWeight: 800, fontFamily: 'inherit', wordBreak: 'break-all' }}>{link}</button>
+          </div>
+        </div>
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+            <Signal label="SENDER" value={inspect ? 'Short code mismatch' : sender} color={inspect ? '#f59e0b' : '#67e8f9'} />
+            <Signal label="LINK" value={opened ? 'Credential page' : 'Unopened'} color={opened ? '#ef4444' : '#94a3b8'} />
+            <Signal label="STATUS" value={blocked ? 'Reported' : 'Untriaged'} color={blocked ? '#86efac' : '#f59e0b'} />
+          </div>
+          {opened && (
+            <div style={{ padding: 16, borderRadius: 12, background: '#f8fafc', color: '#111827', marginBottom: 14 }}>
+              <div style={{ fontSize: 17, fontWeight: 900, marginBottom: 6 }}>Delivery verification</div>
+              <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 12 }}>The linked page asks for card details and a one-time code before showing tracking information.</div>
+              <input disabled placeholder="Card number" style={{ width: '100%', padding: 10, border: '1px solid #cbd5e1', borderRadius: 7, marginBottom: 8, background: '#fff' }} />
+              <input disabled placeholder="SMS code" style={{ width: '100%', padding: 10, border: '1px solid #cbd5e1', borderRadius: 7, background: '#fff' }} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <SmallButton onClick={() => setInspect(true)} tone="info">Inspect Sender</SmallButton>
+            <SmallButton onClick={() => setOpened(true)} tone="bad">Open Link</SmallButton>
+            <SmallButton onClick={() => { setBlocked(true); selectByKeywords(scenario, setSelected, ['report', 'block', 'ignore']); }} tone="good">Block and Report</SmallButton>
+            <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['official', 'direct', 'verify'])} tone="good">Use Official App</SmallButton>
+          </div>
+        </div>
+      </div>
+    </PanelShell>
+  );
+}
+
+function BECSimulator({ scenario, setSelected }) {
+  const data = scenario.extra_data || {};
+  const [invoice, setInvoice] = useState(false);
+  const [approval, setApproval] = useState(false);
+  const [bank, setBank] = useState(false);
+  const amount = data.amount || '$48,000';
+  const vendor = data.vendor || scenario.sender_name || 'Northstar Supplies';
+
+  return (
+    <PanelShell label="BUSINESS EMAIL COMPROMISE DESK">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ fontSize: 16, color: 'var(--text-primary)', fontWeight: 900, marginBottom: 8 }}>{scenario.subject}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 14 }}>{scenario.body}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <SmallButton onClick={() => setInvoice(true)} tone="info">Open Invoice</SmallButton>
+            <SmallButton onClick={() => setBank(true)} tone="warn">Compare Bank Details</SmallButton>
+            <SmallButton onClick={() => setApproval(true)} tone="info">Check Approval Chain</SmallButton>
+            <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['verify', 'call', 'known', 'official'])} tone="good">Verify by Phone</SmallButton>
+            <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'security', 'finance'])} tone="good">Escalate Fraud</SmallButton>
+          </div>
+        </div>
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+            <Signal label="AMOUNT" value={amount} color="#f59e0b" />
+            <Signal label="VENDOR" value={vendor} />
+            <Signal label="APPROVAL" value={approval ? 'Missing CFO trail' : 'Unchecked'} color={approval ? '#ef4444' : '#94a3b8'} />
+          </div>
+          {invoice && <div style={{ padding: 12, borderRadius: 10, background: 'rgba(15,23,42,0.72)', color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.7, marginBottom: 10 }}>Invoice metadata shows the PDF was created today by an external account, but claims to replace last month&apos;s approved payment instructions.</div>}
+          {bank && <div style={{ padding: 12, borderRadius: 10, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca', fontSize: 12, lineHeight: 1.7 }}>Bank account changed from the known vendor profile. Routing country and beneficiary name do not match procurement records.</div>}
+          {!invoice && !bank && !approval && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>Review invoice metadata, bank changes, and approval trail before deciding whether to release payment.</div>}
+        </div>
+      </div>
+    </PanelShell>
+  );
+}
+
+function SupplyChainSimulator({ scenario, setSelected }) {
+  const data = scenario.extra_data || {};
+  const [diff, setDiff] = useState(false);
+  const [signature, setSignature] = useState(false);
+  const [sandbox, setSandbox] = useState(false);
+  const packageName = data.package || data.vendor_update || 'vendor-auth-sdk';
+  const version = data.version || '4.8.1';
+
+  return (
+    <PanelShell label="SUPPLY CHAIN UPDATE REVIEW">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 800, marginBottom: 12 }}>PIPELINE UPDATE</div>
+          <Signal label="PACKAGE" value={packageName} />
+          <div style={{ height: 8 }} />
+          <Signal label="VERSION" value={version} color="#f59e0b" />
+          <div style={{ height: 8 }} />
+          <Signal label="PUBLISHER" value={signature ? 'Signature mismatch' : (data.publisher || 'Known vendor')} color={signature ? '#ef4444' : '#67e8f9'} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+            <SmallButton onClick={() => setDiff(true)} tone="info">Review Diff</SmallButton>
+            <SmallButton onClick={() => setSignature(true)} tone="warn">Verify Signature</SmallButton>
+            <SmallButton onClick={() => setSandbox(true)} tone="info">Run Sandbox</SmallButton>
+          </div>
+        </div>
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ fontSize: 16, color: 'var(--text-primary)', fontWeight: 900, marginBottom: 8 }}>{scenario.subject}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 14 }}>{scenario.body}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+            <Signal label="DIFF" value={diff ? '+ postinstall script' : 'Unchecked'} color={diff ? '#f59e0b' : '#94a3b8'} />
+            <Signal label="SIGNATURE" value={signature ? 'Failed' : 'Pending'} color={signature ? '#ef4444' : '#94a3b8'} />
+            <Signal label="SANDBOX" value={sandbox ? 'Beacon attempt' : 'Not run'} color={sandbox ? '#ef4444' : '#94a3b8'} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['block', 'rollback', 'quarantine', 'report'])} tone="good">Block Release</SmallButton>
+            <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['verify', 'vendor', 'official'])} tone="good">Verify Vendor</SmallButton>
+            <SmallButton onClick={() => selectByKeywords(scenario, setSelected, ['install', 'approve', 'allow'])} tone="bad">Approve Update</SmallButton>
+          </div>
         </div>
       </div>
     </PanelShell>

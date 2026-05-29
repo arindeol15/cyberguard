@@ -62,7 +62,6 @@ function Shell({ label, children }) {
 export default function InteractiveCorePanel({ category, scenario, setSelected }) {
   if (!scenario) return null;
   if (category === 'email') return <EmailInvestigation scenario={scenario} setSelected={setSelected} />;
-  if (category === 'website') return <WebsiteInvestigation scenario={scenario} setSelected={setSelected} />;
   if (category === 'qr') return <QRScannerInvestigation scenario={scenario} setSelected={setSelected} />;
   if (category === 'vishing') return <VishingCallFlow scenario={scenario} setSelected={setSelected} />;
   if (category === 'usb') return <USBDesktopInvestigation scenario={scenario} setSelected={setSelected} />;
@@ -165,8 +164,12 @@ function WebsiteInvestigation({ scenario, setSelected }) {
 function QRScannerInvestigation({ scenario, setSelected }) {
   const data = scenario.extra_data || {};
   const [scan, setScan] = useState(false);
-  const [preview, setPreview] = useState(false);
+  const [pageOpen, setPageOpen] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const target = data.actual_destination || data.qr_url || data.claimed_purpose || 'https://unknown-qr.example/login';
+  const claim = data.claimed_purpose || 'secure registration';
+  const host = target.replace(/^https?:\/\//, '').split('/')[0] || 'unknown-qr.example';
+  const openFakePage = () => { setScan(true); setPageOpen(true); };
 
   return (
     <Shell label="MOBILE QR SCANNER">
@@ -175,20 +178,56 @@ function QRScannerInvestigation({ scenario, setSelected }) {
           <div style={{ height: 34, color: '#94a3b8', fontSize: 11, textAlign: 'center' }}>Camera</div>
           <div style={{ height: 260, borderRadius: 18, background: 'linear-gradient(135deg, #0f172a, #111827)', border: '1px solid rgba(34,211,238,0.2)', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', inset: 34, border: '2px solid rgba(34,211,238,0.75)', borderRadius: 16, boxShadow: '0 0 24px rgba(34,211,238,0.24)' }} />
-            {scan && <div style={{ position: 'absolute', left: 38, right: 38, top: preview ? 190 : 60, height: 2, background: '#22d3ee', boxShadow: '0 0 18px #22d3ee', transition: 'top 0.9s' }} />}
+            {scan && <div style={{ position: 'absolute', left: 38, right: 38, top: pageOpen ? 190 : 60, height: 2, background: '#22d3ee', boxShadow: '0 0 18px #22d3ee', transition: 'top 0.9s' }} />}
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: scan ? '#67e8f9' : '#64748b', fontSize: 12, fontWeight: 800 }}>{scan ? 'QR DETECTED' : 'POINT CAMERA AT CODE'}</div>
           </div>
-        </div>
-        <div style={{ ...cardStyle, padding: 16 }}>
-          <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900, marginBottom: 8 }}>{scenario.subject}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 14 }}>{data.claimed_purpose || 'The code claims to open a trusted service.'}</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
             <ActionButton onClick={() => setScan(true)} tone="info">Scan Code</ActionButton>
-            <ActionButton onClick={() => { setScan(true); setPreview(true); }} tone="warn">Preview Destination</ActionButton>
-            <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual'])} tone="good">Verify Officially</ActionButton>
-            <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk'])} tone="good">Avoid QR</ActionButton>
+            <ActionButton onClick={openFakePage} tone="warn">Open Page</ActionButton>
           </div>
-          {preview && <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.34)', color: '#fecaca', fontSize: 12, wordBreak: 'break-all' }}>Destination preview: {target}</div>}
+        </div>
+        <div style={{ ...cardStyle, overflow: 'hidden' }}>
+          {!pageOpen ? (
+            <div style={{ padding: 18 }}>
+              <div style={{ fontSize: 16, color: 'var(--text-primary)', fontWeight: 900, marginBottom: 8 }}>{scenario.subject}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 14 }}>{claim}</div>
+              {scan && (
+                <div style={{ padding: 12, borderRadius: 10, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)', color: '#fde68a', fontSize: 12, marginBottom: 14 }}>
+                  Scan result: a mobile browser is ready to open an external page.
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <ActionButton onClick={openFakePage} tone="warn">Open Scanned Page</ActionButton>
+                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual'])} tone="good">Verify Officially</ActionButton>
+                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid'])} tone="good">Report QR</ActionButton>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ background: '#e5e7eb', padding: 10 }}>
+                <div style={{ padding: '7px 10px', borderRadius: 8, background: '#fff', border: '1px solid #cbd5e1', color: '#991b1b', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>Not secure / {host}</div>
+              </div>
+              <div style={{ minHeight: 270, padding: 20, background: '#f8fafc', color: '#111827' }}>
+                <div style={{ maxWidth: 420 }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>{claim}</div>
+                  <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, marginBottom: 16 }}>Complete verification to continue. This page was opened from the scanned QR code and is requesting account details before showing the service.</div>
+                  <input disabled placeholder="Work email" style={{ width: '100%', maxWidth: 340, padding: 11, borderRadius: 7, border: '1px solid #cbd5e1', marginBottom: 8, background: '#fff', color: '#64748b' }} />
+                  <input disabled placeholder="Password or payment code" style={{ width: '100%', maxWidth: 340, padding: 11, borderRadius: 7, border: '1px solid #cbd5e1', marginBottom: 12, background: '#fff', color: '#64748b' }} />
+                  <button onClick={() => setSubmitted(true)} style={{ width: '100%', maxWidth: 340, padding: 11, border: 'none', borderRadius: 7, background: '#2563eb', color: '#fff', fontWeight: 900, fontFamily: 'inherit' }}>Continue</button>
+                </div>
+                {submitted && (
+                  <div style={{ marginTop: 16, padding: 12, borderRadius: 10, background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', fontSize: 12, fontWeight: 800 }}>
+                    Credential capture simulated: the QR page would send the form to {host}.
+                  </div>
+                )}
+              </div>
+              <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual'])} tone="good">Verify Officially</ActionButton>
+                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid'])} tone="good">Report QR</ActionButton>
+                <ActionButton onClick={() => setPageOpen(false)} tone="neutral">Close Page</ActionButton>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </Shell>

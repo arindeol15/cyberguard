@@ -149,6 +149,21 @@ ADVANCED_MODULE_CONTEXT = {
         "examples": "phishing email, fake login page, MFA fatigue, internal chat scam, ransomware infection",
         "extra": "stages, initial_access, final_impact",
     },
+    "smishing": {
+        "name": "SMS phishing and mobile credential theft",
+        "examples": "fake delivery alerts, toll fees, bank fraud texts, HR benefit texts, shortened links, OTP theft",
+        "extra": "sender_number, message, short_url, landing_page, requested_data",
+    },
+    "bec": {
+        "name": "business email compromise and invoice fraud",
+        "examples": "wire transfer changes, fake executive approval, vendor bank detail swaps, urgent invoice release",
+        "extra": "vendor, amount, bank_change, approval_chain, invoice_metadata",
+    },
+    "supply_chain": {
+        "name": "software supply chain compromise",
+        "examples": "malicious package update, poisoned vendor patch, build script injection, unsigned installer",
+        "extra": "package, version, publisher, signature_status, diff_summary, sandbox_findings",
+    },
 }
 
 
@@ -615,6 +630,62 @@ def generate_local_ai_scenario(category: str, difficulty: str, used_types: list[
             },
         })
         safe = ("Contain and report", "Revoke sessions")
+    elif category == "smishing":
+        short_url = f"https://{suspicious_domain}/m/{seed}"
+        result.update({
+            "type": "ai_generated_smishing",
+            "subject": f"Suspicious SMS about {theme} ({incident})",
+            "body": (
+                f"A text message from an unknown short code claims {company} needs immediate action for a {theme}. "
+                f"It includes {short_url} and says the request expires soon. The linked mobile page asks for credentials and an OTP."
+            ),
+            "extra_data": {
+                "sender_number": f"+1-844-{random.randint(100, 999)}-{random.randint(1000, 9999)}",
+                "message": f"{company}: {theme.title()} pending. Confirm now: {short_url}",
+                "short_url": short_url,
+                "landing_page": "Mobile credential capture form",
+                "requested_data": ["work email", "password", "one-time code"],
+            },
+        })
+        safe = ("Block and report", "Use official app")
+    elif category == "bec":
+        amount = random.choice(["$18,750", "$42,300", "$96,000", "$124,500"])
+        result.update({
+            "type": "ai_generated_bec",
+            "subject": f"Invoice payment change request ({incident})",
+            "body": (
+                f"An email thread appears to come from {person} at {company}, asking finance to release {amount} to a new bank account today. "
+                f"The sender says the executive approval already happened verbally and warns that the vendor contract will slip if payment is delayed."
+            ),
+            "extra_data": {
+                "vendor": company,
+                "amount": amount,
+                "bank_change": "New beneficiary and routing details do not match vendor profile",
+                "approval_chain": "Missing ticket and missing CFO approval in workflow",
+                "invoice_metadata": "PDF created today by an external mailbox",
+            },
+        })
+        safe = ("Verify by phone", "Escalate fraud")
+    elif category == "supply_chain":
+        package = random.choice(["vendor-auth-sdk", "cloud-sync-agent", "invoice-parser-lib", "endpoint-helper"])
+        version = f"{random.randint(2, 6)}.{random.randint(1, 9)}.{random.randint(0, 9)}"
+        result.update({
+            "type": "ai_generated_supply_chain",
+            "subject": f"Vendor package update review ({incident})",
+            "body": (
+                f"A dependency update for {package} version {version} appears in the build queue. "
+                f"The release notes mention a security fix, but the package adds a postinstall script and the publisher signature differs from prior releases."
+            ),
+            "extra_data": {
+                "package": package,
+                "version": version,
+                "publisher": company,
+                "signature_status": "Mismatch with previous trusted signer",
+                "diff_summary": ["new postinstall script", "network call during build", "minified credential helper"],
+                "sandbox_findings": ["beacon attempt", "environment variable read", "downloaded secondary payload"],
+            },
+        })
+        safe = ("Block release", "Verify vendor")
 
     result["options"] = build_options(correct_pos, safe[0], safe[1], risky)
     result["correct_id"] = correct_pos

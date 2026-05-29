@@ -594,30 +594,16 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
           </div>
         )}
 
-        {scenario.extra_data && category === 'qr' && (
-          <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>QR ANALYSIS</div>
-            <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-              <QRCode url={scenario.extra_data.actual_destination || scenario.extra_data.qr_url || 'https://malicious-site.com'} />
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
-                <div><strong style={{ color: 'var(--text-primary)' }}>Location:</strong> {scenario.extra_data.location}</div>
-                <div><strong style={{ color: 'var(--text-primary)' }}>Claims to be:</strong> {scenario.extra_data.claimed_purpose}</div>
-                <div><strong style={{ color: 'var(--text-primary)' }}>Placement:</strong> {scenario.extra_data.qr_placement}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {scenario.extra_data && category === 'vishing' && (
           <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>CALL DETAILS</div>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
               <VishingPlayer transcript={scenario.body} callerName={scenario.extra_data.caller_name || scenario.subject} />
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
-                <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenario.extra_data.caller_id}</span></div>
-                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenario.extra_data.claimed_organization}</strong></div>
-                <div>Tactics: <span style={{ color: '#f59e0b' }}>{scenario.extra_data.tactics_used?.join(', ')}</span></div>
-                <div>Wants: <span style={{ color: '#ef4444' }}>{scenario.extra_data.info_requested?.join(', ')}</span></div>
+                <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenario.extra_data.caller_id || 'Unknown caller ID'}</span></div>
+                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenario.extra_data.claimed_organization || 'Unverified organization'}</strong></div>
+                <div>Tactics: <span style={{ color: '#f59e0b' }}>{Array.isArray(scenario.extra_data.tactics_used) ? scenario.extra_data.tactics_used.join(', ') : 'urgency, authority'}</span></div>
+                <div>Wants: <span style={{ color: '#ef4444' }}>{Array.isArray(scenario.extra_data.info_requested) ? scenario.extra_data.info_requested.join(', ') : 'credentials or payment action'}</span></div>
               </div>
             </div>
           </div>
@@ -709,6 +695,9 @@ function ResultMetrics({ result, scenario, category, catInfo }) {
     dns: ['pharming', 'certificate mismatch', 'resolver poisoning'],
     deepfake: ['synthetic voice', 'urgency manipulation', 'identity spoofing'],
     attack_chain: ['multi-stage intrusion', 'identity pivot', 'ransomware path'],
+    smishing: ['SMS spoofing', 'short-link lure', 'OTP theft'],
+    bec: ['invoice fraud', 'executive pressure', 'bank detail swap'],
+    supply_chain: ['poisoned update', 'signature mismatch', 'build pipeline abuse'],
   }[category] || ['social engineering', 'trust abuse'];
   const strengths = result.correct
     ? ['Selected a defensible response', 'Reduced downstream compromise risk', `Handled ${catInfo?.label || category} indicators`]
@@ -1232,12 +1221,26 @@ function QRCode({ url }) {
 // ── VISHING PLAYER ──
 function VishingPlayer({ transcript, callerName }) {
   const extractLines = (text) => {
-    const callerLines = text
+    const source = text || '';
+    const quoted = source.match(/["']([^"']{20,240})["']/);
+    if (quoted?.[1]) return quoted[1].trim();
+
+    const callerLines = source
       .split('\n')
-      .filter(l => l.trim().toLowerCase().startsWith('caller:'))
-      .map(l => l.replace(/caller:/i, '').trim())
+      .filter(l => /^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i.test(l))
+      .map(l => l.replace(/^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i, '').trim())
+      .filter(Boolean)
+      .slice(0, 4)
       .join('. ');
-    return callerLines || text;
+    if (callerLines) return callerLines;
+
+    const sentences = source
+      .replace(/\s+/g, ' ')
+      .split(/(?<=[.!?])\s+/)
+      .filter(s => /(need|verify|confirm|approve|send|wire|password|code|urgent|account|access)/i.test(s))
+      .slice(0, 2)
+      .join(' ');
+    return sentences || source.slice(0, 220);
   };
 
   return (
