@@ -3,6 +3,7 @@ import * as api from './api';
 import { ADVANCED_CATEGORIES, AdvancedScenarioPanel, IncidentResponseMode, SOCDashboard } from './AdvancedModules';
 import SimulationAudioPlayer from './SimulationAudioPlayer';
 import InteractiveCorePanel from './InteractiveCoreModules';
+import { getScenarioCallerIdentity, sanitizeCallerText } from './callerIdentity';
 
 const DIFF = {
   Easy: { bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.3)', color: '#22c55e', pts: 10 },
@@ -446,6 +447,22 @@ function normalizeWebsiteExtra(extra = {}) {
   };
 }
 
+function callScenarioIntro(category, scenario, identity) {
+  if (!identity || !['vishing', 'deepfake'].includes(category)) return scenario.body;
+  const data = scenario.extra_data || {};
+  const source = String(data.transcript || scenario.body || '');
+  const quoted = source.match(/"([^"]{20,260})"/) || source.match(/(?:^|[\s:])'([^']{20,260})'/);
+  const request = sanitizeCallerText(quoted?.[1] || source)
+    .replace(/^caller:\s*/i, '')
+    .slice(0, 260);
+  const org = data.claimed_organization || identity.org || 'a trusted office';
+  return [
+    `Your phone rings from ${identity.name}, who claims to be from ${org}.`,
+    request ? `Caller request: ${request}` : 'The caller is pushing you to act quickly during the call.',
+    'Listen to the call, inspect the details, and decide whether to comply, verify, or report.',
+  ].join('\n\n');
+}
+
 function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const [scenario, setScenario] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -511,6 +528,10 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   );
 
   const websiteExtra = category === 'website' ? normalizeWebsiteExtra(scenario.extra_data || {}) : null;
+  const callIdentity = ['vishing', 'deepfake'].includes(category)
+    ? getScenarioCallerIdentity(scenario, scenario.extra_data || {}, category)
+    : null;
+  const displayedBody = callScenarioIntro(category, scenario, callIdentity);
 
   if (result) return (
     <ResultView result={result} scenario={scenario} category={category} catInfo={catInfo} onNext={load} onHome={() => setPage('home')} />
@@ -569,7 +590,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
             </div>
           )}
         </div>
-        <div style={{ padding: 24, fontSize: 14, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{scenario.body}</div>
+        <div style={{ padding: 24, fontSize: 14, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{displayedBody}</div>
 
         {/* Category-specific panels */}
         {websiteExtra && (
@@ -600,13 +621,13 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
               <VishingPlayer
                 transcript={scenario.body}
-                callerName={scenario.extra_data.caller_name || scenario.subject}
                 difficulty={scenario.difficulty}
                 extraData={scenario.extra_data}
+                callerIdentity={callIdentity}
               />
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
                 <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenario.extra_data.caller_id || 'Unknown caller ID'}</span></div>
-                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenario.extra_data.claimed_organization || 'Unverified organization'}</strong></div>
+                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenario.extra_data.claimed_organization || callIdentity?.org || 'Unverified organization'}</strong></div>
                 <div>Tactics: <span style={{ color: '#f59e0b' }}>{Array.isArray(scenario.extra_data.tactics_used) ? scenario.extra_data.tactics_used.join(', ') : 'urgency, authority'}</span></div>
                 <div>Wants: <span style={{ color: '#ef4444' }}>{Array.isArray(scenario.extra_data.info_requested) ? scenario.extra_data.info_requested.join(', ') : 'credentials or payment action'}</span></div>
               </div>
@@ -1224,32 +1245,36 @@ function QRCode({ url }) {
 }
 
 // ── VISHING PLAYER ──
-function VishingPlayer({ transcript, callerName, difficulty = 'Medium', extraData = {} }) {
+function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, callerIdentity }) {
+  const identity = callerIdentity || { name: 'Avery Brooks', role: 'Verification Agent', org: 'Security Desk', voiceHint: 'caller' };
   const difficultyKey = String(difficulty || '').toLowerCase();
+  const namePattern = 'Sarah|Kevin|Maya|Marcus|Elena|Daniel|Priya|Thomas|Nadia|Owen|Avery|Riley|Samira|Jonah|Nina|Adrian|Jordan|Sofia|Laura|Victor';
+  const normalizeCallerName = (line) => String(line || '').replace(new RegExp(`\\bmy name is (${namePattern})\\b`, 'i'), `my name is ${identity.name.split(' ')[0]}`);
   const extractRequest = (source) => {
-    const quoted = source.match(/["']([^"']{20,260})["']/);
-    if (quoted?.[1]) return quoted[1].trim();
+    const quoted = source.match(/"([^"]{20,260})"/) || source.match(/(?:^|[\s:])'([^']{20,260})'/);
+    if (quoted?.[1]) return normalizeCallerName(sanitizeCallerText(quoted[1]).trim());
     const request = source
       .replace(/\s+/g, ' ')
       .split(/(?<=[.!?])\s+/)
       .find(s => /(verify|confirm|approve|send|wire|password|code|download|install|card|account|urgent|payment|access)/i.test(s));
-    return request || source.replace(/\s+/g, ' ').slice(0, 220);
+    return normalizeCallerName(sanitizeCallerText(request || source.replace(/\s+/g, ' ').slice(0, 220)));
   };
 
   const buildCallScript = (text) => {
     if (extraData.call_script) {
-      return Array.isArray(extraData.call_script) ? extraData.call_script.join('\n') : String(extraData.call_script);
+      return sanitizeCallerText(Array.isArray(extraData.call_script) ? extraData.call_script.join('\n') : String(extraData.call_script));
     }
     const source = text || '';
     const callerLines = source
       .split('\n')
       .filter(l => /^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i.test(l))
-      .map(l => l.replace(/^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i, '').trim())
+      .map(l => normalizeCallerName(sanitizeCallerText(l.replace(/^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i, '').trim())))
       .filter(Boolean)
       .slice(0, 7);
-    if (callerLines.length >= 3) return callerLines.join('\n');
+    const organization = extraData.claimed_organization || identity.org || 'Security Desk';
+    const intro = `Hi, this is ${identity.name} from ${organization}.`;
+    if (callerLines.length >= 3) return [intro, ...callerLines].join('\n');
 
-    const org = extraData.claimed_organization || callerName || 'account security';
     const wants = Array.isArray(extraData.info_requested) && extraData.info_requested.length
       ? extraData.info_requested.join(', ')
       : 'verification details';
@@ -1261,7 +1286,7 @@ function VishingPlayer({ transcript, callerName, difficulty = 'Medium', extraDat
         : 'I can stay on the line while you complete it, but we need to move quickly.';
 
     return [
-      `Hi, this is ${org}. Am I speaking with the account holder?`,
+      `${intro} Am I speaking with the account holder?`,
       request,
       pressureLine,
       `For security, I need you to provide ${wants} before I can release the hold.`,
@@ -1270,14 +1295,11 @@ function VishingPlayer({ transcript, callerName, difficulty = 'Medium', extraDat
     ].join('\n');
   };
 
-  const voiceProfile = /ceo|cfo|manager|executive|vendor/i.test(`${callerName} ${extraData.claimed_organization || ''}`)
-    ? 'executive'
-    : /support|help|microsoft|bank|fraud/i.test(`${callerName} ${extraData.claimed_organization || ''}`)
-      ? 'support'
-      : 'caller';
+  const voiceProfile = identity.voiceHint || 'caller';
   const rate = difficultyKey === 'hard' ? 0.86 : difficultyKey === 'easy' ? 0.95 : 0.9;
   const pitch = difficultyKey === 'hard' ? 0.78 : difficultyKey === 'easy' ? 1.02 : 0.9;
   const callScript = buildCallScript(transcript);
+  const displayCaller = `${identity.name} / ${identity.role}`;
 
   return (
     <div style={{
@@ -1289,7 +1311,7 @@ function VishingPlayer({ transcript, callerName, difficulty = 'Medium', extraDat
         <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900 }}>CALL</div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>Incoming Call</div>
-          <div style={{ fontSize: 10, color: '#94a3b8' }}>{callerName}</div>
+          <div style={{ fontSize: 10, color: '#94a3b8' }}>{displayCaller}</div>
         </div>
       </div>
       <SimulationAudioPlayer

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as api from './api';
 import SimulationAudioPlayer from './SimulationAudioPlayer';
+import { getScenarioCallerIdentity, humanizeCallerLabel, sanitizeCallerText } from './callerIdentity';
 
 export const ADVANCED_CATEGORIES = [
   { id: 'chat', label: 'Internal Chat', icon: 'CH', desc: 'Teams and Slack scams', color: '#14b8a6' },
@@ -87,24 +88,31 @@ function listValue(value, fallback = []) {
 
 function extractSuspiciousRequest(source) {
   const text = String(source || '').replace(/\s+/g, ' ').trim();
-  const quoted = text.match(/["']([^"']{20,260})["']/);
-  if (quoted?.[1]) return quoted[1].trim();
+  const quoted = text.match(/"([^"]{20,260})"/) || text.match(/(?:^|[\s:])'([^']{20,260})'/);
+  if (quoted?.[1]) return sanitizeCallerText(quoted[1]).trim();
   const sentence = text
     .split(/(?<=[.!?])\s+/)
     .find(s => /(buy|send|wire|approve|transfer|password|code|gift card|payment|verify|login|confidential|urgent)/i.test(s));
-  return sentence || text.slice(0, 220);
+  return sanitizeCallerText(sentence || text.slice(0, 220));
 }
 
-function buildAIImpersonationCall(scenario, data) {
+function buildAIImpersonationCall(scenario, data, identity) {
+  const organization = data.claimed_organization || identity.org || 'Executive Office';
+  const intro = `Hey, it is ${identity.name} from ${organization}. Can you hear me okay?`;
   if (data.call_script) {
-    return Array.isArray(data.call_script) ? data.call_script.join('\n') : String(data.call_script);
+    const raw = Array.isArray(data.call_script) ? data.call_script.join('\n') : String(data.call_script);
+    const cleanedLines = sanitizeCallerText(raw).split('\n').map(line => line.trim()).filter(Boolean);
+    return [intro, ...cleanedLines].join('\n');
   }
   const existing = String(data.transcript || '').trim();
-  if (existing.split('\n').filter(Boolean).length >= 3) return existing;
+  const existingLines = sanitizeCallerText(existing).split('\n').map(line => line.trim()).filter(Boolean);
+  if (existingLines.length >= 3) return [intro, ...existingLines].join('\n');
 
   const difficulty = String(scenario.difficulty || '').toLowerCase();
-  const impersonated = data.impersonated || scenario.sender_name || 'your manager';
-  const request = extractSuspiciousRequest(existing || scenario.body);
+  const firstName = identity.name.split(' ')[0];
+  const namePattern = 'Sarah|Kevin|Maya|Marcus|Elena|Daniel|Priya|Thomas|Nadia|Owen|Avery|Riley|Samira|Jonah|Nina|Adrian|Jordan|Sofia|Laura|Victor';
+  const request = extractSuspiciousRequest(existing || scenario.body)
+    .replace(new RegExp(`\\b(this is|i'm|i am)\\s+(${namePattern})\\b`, 'i'), `$1 ${firstName}`);
   const pressure = difficulty === 'hard'
     ? 'I am between meetings and this cannot go through the normal queue right now.'
     : difficulty === 'easy'
@@ -115,7 +123,7 @@ function buildAIImpersonationCall(scenario, data) {
     : 'Please do not message anyone else about this yet, it will slow the client handoff.';
 
   return [
-    `Hey, it is ${impersonated}. Can you hear me okay?`,
+    intro,
     pressure,
     request,
     'I need you to confirm when it is done, preferably in this thread.',
@@ -124,14 +132,9 @@ function buildAIImpersonationCall(scenario, data) {
   ].join('\n');
 }
 
-function aiVoiceSettings(scenario, data) {
+function aiVoiceSettings(scenario, data, identity) {
   const difficulty = String(scenario.difficulty || '').toLowerCase();
-  const identityText = `${data.impersonated || ''} ${scenario.sender_name || ''}`;
-  const voiceHint = /assistant|hr|recruiter|director|maya|sarah|linda|anna|emma|jenny/i.test(identityText)
-    ? 'female'
-    : /ceo|cfo|manager|founder|executive|chief/i.test(identityText)
-      ? 'executive'
-      : 'caller';
+  const voiceHint = identity.voiceHint || 'caller';
   return {
     voiceHint,
     rate: difficulty === 'hard' ? 0.84 : difficulty === 'easy' ? 0.96 : 0.9,
@@ -665,19 +668,22 @@ function DeepfakeScamSimulator({ scenario, setSelected }) {
   const [analysis, setAnalysis] = useState(false);
   const [identityCheck, setIdentityCheck] = useState(false);
   const markers = listValue(data.markers, ['Urgent payment pressure', 'No callback path', 'Synthetic cadence', 'Requests secrecy']);
-  const transcript = buildAIImpersonationCall(scenario, data);
-  const voiceSettings = aiVoiceSettings(scenario, data);
+  const callerIdentity = getScenarioCallerIdentity(scenario, data, 'deepfake');
+  const transcript = buildAIImpersonationCall(scenario, data, callerIdentity);
+  const voiceSettings = aiVoiceSettings(scenario, data, callerIdentity);
+  const displayCaller = humanizeCallerLabel(data.impersonated || scenario.sender_name || scenario.subject, callerIdentity);
+  const channel = sanitizeCallerText(data.channel || 'Incoming phone call') || 'Incoming phone call';
 
   return (
-    <PanelShell label="AI MEDIA FORENSICS">
+    <PanelShell label="MEDIA FORENSICS">
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
         <div style={{ ...cardStyle, padding: 18 }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', margin: '0 auto 14px', background: 'radial-gradient(circle at 35% 30%, #f9a8d4, #ec4899 42%, #4c1d95)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 30, fontWeight: 900, boxShadow: '0 0 28px rgba(236,72,153,0.42)' }}>
-            {data.impersonated?.charAt(0) || 'C'}
+            {callerIdentity.name.charAt(0)}
           </div>
           <div style={{ textAlign: 'center', marginBottom: 14 }}>
-            <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900 }}>{data.impersonated || 'AI-cloned caller'}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{data.channel || 'Incoming phone call'}</div>
+            <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900 }}>{displayCaller}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{channel}</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <Signal label="LIVENESS" value={identityCheck ? 'Challenge sent' : 'Unchecked'} color={identityCheck ? '#f59e0b' : '#94a3b8'} />
@@ -687,7 +693,7 @@ function DeepfakeScamSimulator({ scenario, setSelected }) {
         <div style={{ ...cardStyle, padding: 16 }}>
           <SimulationAudioPlayer
             title="Live Caller Playback"
-            subtitle={`${scenario.difficulty || 'Medium'} AI impersonation call`}
+            subtitle={`${scenario.difficulty || 'Medium'} impersonation call`}
             transcript={transcript}
             audioSrc={data.audio_url || data.audioSrc || ''}
             voiceHint={voiceSettings.voiceHint}
