@@ -6,11 +6,17 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db, User
 import os
+import secrets
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "default-secret-key")
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
+if APP_ENV == "production" and (not SECRET_KEY or SECRET_KEY == "default-secret-key"):
+    raise RuntimeError("SECRET_KEY must be configured with a strong value in production.")
+if not SECRET_KEY:
+    SECRET_KEY = secrets.token_urlsafe(48)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 

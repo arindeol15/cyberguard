@@ -2,6 +2,7 @@ import json
 import httpx
 import os
 import random
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -279,7 +280,68 @@ def extract_json_object(text: str) -> dict:
     end = clean.rfind("}")
     if start == -1 or end == -1 or end <= start:
         raise ValueError("No JSON object found in AI response")
-    return json.loads(clean[start:end + 1])
+    candidate = clean[start:end + 1]
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        # Claude occasionally returns valid JSON with a trailing comma. Repair only
+        # this narrow, deterministic case; malformed content gets a correction pass.
+        repaired = re.sub(r",\s*([}\]])", r"\1", candidate)
+        return json.loads(repaired)
+
+
+async def request_claude_json(client: httpx.AsyncClient, model: str, prompt: str) -> dict:
+    response = await client.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY.strip(),
+            "anthropic-version": "2023-06-01",
+        },
+        json={
+            "model": model,
+            "max_tokens": 3600,
+            "temperature": 0.85,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+    )
+    response.raise_for_status()
+    data = response.json()
+    text = "".join(b["text"] for b in data.get("content", []) if b.get("type") == "text")
+    try:
+        return extract_json_object(text)
+    except (json.JSONDecodeError, ValueError) as first_error:
+        correction_prompt = (
+            "Return a corrected version of the JSON object below. Output JSON only, "
+            "with no markdown or explanation. Preserve the scenario content, keep exactly "
+            "four options, and ensure all strings are escaped correctly.\n\n"
+            f"{text[:12000]}"
+        )
+        correction = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY.strip(),
+                "anthropic-version": "2023-06-01",
+            },
+            json={
+                "model": model,
+                "max_tokens": 3600,
+                "temperature": 0,
+                "messages": [{"role": "user", "content": correction_prompt}],
+            },
+        )
+        correction.raise_for_status()
+        correction_data = correction.json()
+        corrected_text = "".join(
+            b["text"] for b in correction_data.get("content", []) if b.get("type") == "text"
+        )
+        try:
+            return extract_json_object(corrected_text)
+        except (json.JSONDecodeError, ValueError) as correction_error:
+            raise ValueError(
+                f"Claude JSON remained invalid after correction: {correction_error}"
+            ) from first_error
 
 
 def normalize_ai_result(result: dict, category: str, difficulty: str, correct_pos: str) -> dict:
@@ -694,7 +756,10 @@ def generate_local_ai_scenario(category: str, difficulty: str, used_types: list[
     return normalize_ai_result(result, category, difficulty, correct_pos)
 
 
-async def generate_ai_scenario(category: str, difficulty: str, used_types: list[str] = [], used_subjects: list[str] = []) -> dict | None:
+async def generate_ai_scenario(category: str, difficulty: str, used_types: list[str] = None,
+                               used_subjects: list[str] = None) -> dict | None:
+    used_types = used_types or []
+    used_subjects = used_subjects or []
     seed = random.randint(10000, 99999)
     industry = random.choice(INDUSTRIES)
     theme = random.choice(THEMES)
@@ -724,24 +789,7 @@ async def generate_ai_scenario(category: str, difficulty: str, used_types: list[
     async with httpx.AsyncClient(timeout=45.0) as client:
         for model in model_candidates():
             try:
-                response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-api-key": ANTHROPIC_API_KEY.strip(),
-                        "anthropic-version": "2023-06-01",
-                    },
-                    json={
-                        "model": model,
-                        "max_tokens": 2000,
-                        "temperature": 1.0,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-                text = "".join(b["text"] for b in data.get("content", []) if b.get("type") == "text")
-                result = extract_json_object(text)
+                result = await request_claude_json(client, model, prompt)
                 result["correct_id"] = result.get("correct_id") or correct_pos
                 set_ai_status("claude", None, model)
                 return normalize_ai_result(result, category, difficulty, correct_pos)

@@ -2,7 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-import json, random, httpx
+from datetime import datetime, timedelta, timezone
+import json, os, random, httpx
 
 from database import init_db, get_db, User, Scenario, Response, ThreatFeed
 from auth import hash_password, verify_password, create_access_token, get_current_user
@@ -12,8 +13,25 @@ from ai_engine import generate_ai_scenario, get_ai_status
 from seed import seed_database
 from scenarios_seed import ALL_SCENARIOS
 
-app = FastAPI(title="CyberGuard API", version="2.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+CORS_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if APP_ENV == "production" and not CORS_ORIGINS:
+    raise RuntimeError("CORS_ORIGINS must list the deployed frontend URL in production.")
+if not CORS_ORIGINS:
+    CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+app = FastAPI(title="CyberGuard API", version="2.2.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 POINTS = {"Easy": 10, "Medium": 20, "Hard": 35}
 DEFAULT_OPTIONS = [
@@ -473,61 +491,133 @@ def get_stats(db: Session = Depends(get_db), user: User = Depends(get_current_us
         "by_difficulty": by_difficulty, "by_type": by_type, "by_category": by_category}
 
 # ── THREAT INTELLIGENCE ──
+THREAT_CACHE_HOURS = 6
+THREAT_MAX_AGE_DAYS = 120
+
+
+def _parse_threat_date(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        try:
+            return datetime.strptime(str(value)[:10], "%Y-%m-%d")
+        except ValueError:
+            return None
+
+
+def _recent_cached_threats(db):
+    cutoff = datetime.utcnow() - timedelta(days=THREAT_MAX_AGE_DAYS)
+    cached = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(80).all()
+    recent = [
+        threat for threat in cached
+        if _parse_threat_date(threat.published_at)
+        and _parse_threat_date(threat.published_at) >= cutoff
+    ]
+    return sorted(recent, key=lambda threat: threat.published_at or "", reverse=True)[:20]
+
+
+def _cache_is_fresh(threats):
+    if len(threats) < 5:
+        return False
+    newest_fetch = max((threat.fetched_at for threat in threats if threat.fetched_at), default=None)
+    return bool(newest_fetch and newest_fetch >= datetime.utcnow() - timedelta(hours=THREAT_CACHE_HOURS))
+
+
+def _nvd_score(metrics):
+    for metric_name in ("cvssMetricV40", "cvssMetricV31", "cvssMetricV30"):
+        for metric in metrics.get(metric_name, []):
+            score = metric.get("cvssData", {}).get("baseScore")
+            if score is not None:
+                return float(score)
+    return None
+
+
+async def _fetch_current_threats():
+    fresh = []
+    seen_titles = set()
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        try:
+            cisa_resp = await client.get(
+                "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+            )
+            cisa_resp.raise_for_status()
+            cisa_data = cisa_resp.json()
+            vulns = sorted(
+                cisa_data.get("vulnerabilities", []),
+                key=lambda vuln: vuln.get("dateAdded", ""),
+                reverse=True,
+            )[:8]
+            for vuln in vulns:
+                title = f"{vuln.get('cveID', '')}: {vuln.get('vulnerabilityName', '')}".strip(": ")
+                if not title or title in seen_titles:
+                    continue
+                seen_titles.add(title)
+                fresh.append({
+                    "title": title,
+                    "severity": "Critical",
+                    "category": "Known Exploited Vulnerability",
+                    "summary": vuln.get("shortDescription", "")[:300],
+                    "source": "CISA KEV",
+                    "published_at": vuln.get("dateAdded", ""),
+                })
+        except Exception as e:
+            print(f"CISA fetch failed: {e}")
+
+        try:
+            now = datetime.now(timezone.utc)
+            start = now - timedelta(days=30)
+            nvd_resp = await client.get(
+                "https://services.nvd.nist.gov/rest/json/cves/2.0",
+                params={
+                    "pubStartDate": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                    "pubEndDate": now.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                    "resultsPerPage": 20,
+                },
+            )
+            nvd_resp.raise_for_status()
+            nvd_data = nvd_resp.json()
+            nvd_count = 0
+            for item in nvd_data.get("vulnerabilities", []):
+                cve = item.get("cve", {})
+                title = cve.get("id", "")
+                score = _nvd_score(cve.get("metrics", {}))
+                if not title or title in seen_titles or score is None or score < 7:
+                    continue
+                descriptions = cve.get("descriptions", [])
+                description = next((d["value"] for d in descriptions if d.get("lang") == "en"), "")
+                seen_titles.add(title)
+                fresh.append({
+                    "title": title,
+                    "severity": "Critical" if score >= 9 else "High",
+                    "category": "Recent CVE",
+                    "summary": description[:300] if description else "No description available",
+                    "source": "NVD",
+                    "published_at": cve.get("published", "")[:10],
+                })
+                nvd_count += 1
+                if nvd_count >= 7:
+                    break
+        except Exception as e:
+            print(f"NVD fetch failed: {e}")
+    return fresh
+
+
 @app.get("/api/threats")
 async def get_threat_feed(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
-    if len(threats) < 5:
+    threats = _recent_cached_threats(db)
+    if not _cache_is_fresh(threats):
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                # Source 1: CISA Known Exploited Vulnerabilities (real government data)
-                try:
-                    cisa_resp = await client.get("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json")
-                    if cisa_resp.status_code == 200:
-                        cisa_data = cisa_resp.json()
-                        vulns = cisa_data.get("vulnerabilities", [])[-8:]  # latest 8
-                        for v in vulns:
-                            t = ThreatFeed(
-                                title=f"{v.get('cveID','')}: {v.get('vulnerabilityName','')}",
-                                severity="Critical" if "critical" in v.get('shortDescription','').lower() else "High",
-                                category="Vulnerability",
-                                summary=v.get('shortDescription','')[:300],
-                                source="CISA KEV",
-                                published_at=v.get('dateAdded',''),
-                            )
-                            db.add(t)
-                except Exception as e:
-                    print(f"CISA fetch failed: {e}")
-
-                # Source 2: NVD Recent CVEs (real vulnerability data)
-                try:
-                    nvd_resp = await client.get("https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=5")
-                    if nvd_resp.status_code == 200:
-                        nvd_data = nvd_resp.json()
-                        for item in nvd_data.get("vulnerabilities", [])[:5]:
-                            cve = item.get("cve", {})
-                            cve_id = cve.get("id", "")
-                            desc_list = cve.get("descriptions", [])
-                            desc = next((d["value"] for d in desc_list if d.get("lang") == "en"), "")
-                            metrics = cve.get("metrics", {})
-                            score = None
-                            for v in metrics.get("cvssMetricV31", []):
-                                score = v.get("cvssData", {}).get("baseScore")
-                            severity = "Critical" if score and score >= 9 else "High" if score and score >= 7 else "Medium" if score and score >= 4 else "Low"
-                            t = ThreatFeed(
-                                title=cve_id,
-                                severity=severity,
-                                category="CVE",
-                                summary=desc[:300] if desc else "No description available",
-                                source="NVD",
-                                published_at=cve.get("published","")[:10],
-                            )
-                            db.add(t)
-                except Exception as e:
-                    print(f"NVD fetch failed: {e}")
-
+            fresh = await _fetch_current_threats()
+            if fresh:
+                db.query(ThreatFeed).delete()
+                for item in fresh:
+                    db.add(ThreatFeed(**item))
                 db.commit()
-                threats = db.query(ThreatFeed).order_by(ThreatFeed.fetched_at.desc()).limit(20).all()
+                threats = _recent_cached_threats(db)
         except Exception as e:
+            db.rollback()
             print(f"Threat feed failed: {e}")
 
     return [{"id":t.id,"title":t.title,"severity":t.severity,"category":t.category,
