@@ -44,12 +44,6 @@ function Signal({ label, value, color = 'var(--accent-cyan)' }) {
   );
 }
 
-function selectByKeywords(scenario, setSelected, keywords) {
-  const textFor = (o) => `${o.label || ''} ${o.desc || ''}`.toLowerCase();
-  const option = (scenario?.options || []).find(o => keywords.some(k => textFor(o).includes(k)));
-  if (option) setSelected(option.id);
-}
-
 function Shell({ label, children }) {
   return (
     <div style={panelStyle}>
@@ -93,8 +87,8 @@ function EmailInvestigation({ scenario, setSelected, onEvidence }) {
             <ActionButton onClick={() => { setHeaders(true); onEvidence?.('identity'); }} tone="info">Inspect Sender</ActionButton>
             <ActionButton onClick={() => { setLink(true); onEvidence?.('url'); }} tone="warn">Hover Link</ActionButton>
             <ActionButton onClick={() => { setAttachment(true); onEvidence?.('technical'); }} tone="bad">Open Attachment</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'security']); }} tone="good">Report Email</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['verify', 'official', 'direct']); }} tone="good">Verify Officially</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Report Email</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('process'); }} tone="good">Verify Officially</ActionButton>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 12 }}>
@@ -110,7 +104,7 @@ function EmailInvestigation({ scenario, setSelected, onEvidence }) {
   );
 }
 
-function WebsiteInvestigation({ scenario, setSelected }) {
+function WebsiteInvestigation({ scenario, onEvidence }) {
   const data = scenario.extra_data || {};
   const [cert, setCert] = useState(false);
   const [popup, setPopup] = useState(true);
@@ -146,8 +140,8 @@ function WebsiteInvestigation({ scenario, setSelected }) {
         <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <ActionButton onClick={() => setCert(true)} tone="info">Inspect Certificate</ActionButton>
           <ActionButton onClick={() => setPopup(false)} tone="warn">Close Popup</ActionButton>
-          <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['official', 'direct', 'real'])} tone="good">Open Official Site</ActionButton>
-          <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'close'])} tone="good">Report URL</ActionButton>
+          <ActionButton onClick={() => onEvidence?.('process')} tone="good">Open Official Site</ActionButton>
+          <ActionButton onClick={() => onEvidence?.('report')} tone="good">Report URL</ActionButton>
         </div>
         {(cert || urlFocus) && (
           <div style={{ padding: 14, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
@@ -198,8 +192,8 @@ function QRScannerInvestigation({ scenario, setSelected, onEvidence }) {
               )}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <ActionButton onClick={openFakePage} tone="warn">Open Scanned Page</ActionButton>
-                <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual']); }} tone="good">Verify Officially</ActionButton>
-                <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid']); }} tone="good">Report QR</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('process'); }} tone="good">Verify Officially</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Report QR</ActionButton>
               </div>
             </div>
           ) : (
@@ -222,8 +216,8 @@ function QRScannerInvestigation({ scenario, setSelected, onEvidence }) {
                 )}
               </div>
               <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual']); }} tone="good">Verify Officially</ActionButton>
-                <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid']); }} tone="good">Report QR</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('process'); }} tone="good">Verify Officially</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Report QR</ActionButton>
                 <ActionButton onClick={() => setPageOpen(false)} tone="neutral">Close Page</ActionButton>
               </div>
             </>
@@ -249,7 +243,7 @@ function VishingCallFlow({ scenario, setSelected, onEvidence }) {
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{data.caller_id || 'Unknown caller ID'}</div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
             <ActionButton onClick={() => { setAnswered(true); onEvidence?.('audio'); }} tone="info">Answer</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['hang up', 'refuse', 'deny']); }} tone="good">Reject</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Reject</ActionButton>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 16 }}>
@@ -261,8 +255,8 @@ function VishingCallFlow({ scenario, setSelected, onEvidence }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <ActionButton onClick={() => setMuted(v => !v)} tone="neutral">{muted ? 'Unmute' : 'Mute'}</ActionButton>
             <ActionButton onClick={() => { setNote(true); onEvidence?.('technical'); }} tone="info">Record Request</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('identity'); selectByKeywords(scenario, setSelected, ['verify', 'known', 'direct', 'call bank']); }} tone="good">Verify Caller</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'hang up', 'refuse']); }} tone="good">Report Call</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('identity'); }} tone="good">Verify Caller</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Report Call</ActionButton>
           </div>
           {note && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)', color: '#fde68a', fontSize: 12, lineHeight: 1.6 }}>Evidence note saved: caller identity, requested data, urgency language, and callback mismatch.</div>}
         </div>
@@ -306,8 +300,8 @@ function USBDesktopInvestigation({ scenario, setSelected, onEvidence }) {
         <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--border)' }}>
           <ActionButton onClick={() => { setMounted(true); onEvidence?.('impact'); }} tone="bad">Mount Device</ActionButton>
           <ActionButton onClick={() => { setScan(true); onEvidence?.('scan'); }} tone="info">Sandbox Scan</ActionButton>
-          <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['it', 'security', 'scan', 'turn']); }} tone="good">Turn In To IT</ActionButton>
-          <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['ignore', 'discard', 'report']); }} tone="good">Document Incident</ActionButton>
+          <ActionButton onClick={() => { onEvidence?.('process'); }} tone="good">Turn In To IT</ActionButton>
+          <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Document Incident</ActionButton>
         </div>
       </div>
     </Shell>

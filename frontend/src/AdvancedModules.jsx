@@ -76,12 +76,6 @@ function Signal({ label, value, color = 'var(--accent-cyan)' }) {
   );
 }
 
-function selectByKeywords(scenario, setSelected, keywords) {
-  const textFor = (o) => `${o.label || ''} ${o.desc || ''}`.toLowerCase();
-  const option = (scenario?.options || []).find(o => keywords.some(k => textFor(o).includes(k)));
-  if (option) setSelected(option.id);
-}
-
 function listValue(value, fallback = []) {
   return Array.isArray(value) && value.length ? value : fallback;
 }
@@ -237,8 +231,8 @@ function ChatScamSimulator({ scenario, setSelected, onEvidence }) {
             <SmallButton onClick={() => { setInspected(true); onEvidence?.('identity'); }} tone="info">Inspect Sender</SmallButton>
             <SmallButton onClick={() => { setFileOpen(true); onEvidence?.('technical'); }} tone="warn">Open Shared File</SmallButton>
             <SmallButton onClick={() => { setReply('Please confirm by phone or through the HR portal ticket.'); setStatus('challenged'); onEvidence?.('process'); }} tone="neutral">Reply to Attacker</SmallButton>
-            <SmallButton onClick={() => { setStatus('reported'); onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'security']); }} tone="good">Report Chat</SmallButton>
-            <SmallButton onClick={() => { setStatus('verified'); onEvidence?.('identity'); selectByKeywords(scenario, setSelected, ['verify', 'channel']); }} tone="good">Verify Elsewhere</SmallButton>
+            <SmallButton onClick={() => { setStatus('reported'); onEvidence?.('report'); }} tone="good">Report Chat</SmallButton>
+            <SmallButton onClick={() => { setStatus('verified'); onEvidence?.('identity'); }} tone="good">Verify Elsewhere</SmallButton>
           </div>
           {(inspected || reply || status !== 'untriaged') && (
             <div style={{ padding: '0 14px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -282,7 +276,7 @@ function AttachmentSandbox({ scenario, setSelected, onEvidence }) {
             <SmallButton onClick={() => { setMetadata(true); onEvidence?.('technical'); }} tone="info">Inspect Metadata</SmallButton>
             <SmallButton onClick={() => { setScan(true); onEvidence?.('scan'); }} tone="good">Run AV Scan</SmallButton>
             <SmallButton onClick={() => { setOpened(true); onEvidence?.('impact'); }} tone="bad">Open File</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['sandbox', 'report', 'scan']); }} tone="good">Quarantine</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Quarantine</SmallButton>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 16, position: 'relative', overflow: 'hidden' }}>
@@ -373,7 +367,7 @@ function BrowserExploitSimulator({ scenario, setSelected, onEvidence }) {
         <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <SmallButton onClick={() => { setPermissions(true); onEvidence?.('technical'); }} tone="info">Inspect Permissions</SmallButton>
           <SmallButton onClick={() => { setDownload(true); onEvidence?.('impact'); }} tone="bad">Run Installer</SmallButton>
-          <SmallButton onClick={() => { setBlocked(true); onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['block', 'report', 'deny']); }} tone="good">Block and Report</SmallButton>
+          <SmallButton onClick={() => { setBlocked(true); onEvidence?.('report'); }} tone="good">Block and Report</SmallButton>
         </div>
       </div>
     </PanelShell>
@@ -409,8 +403,8 @@ function MFASimulator({ scenario, setSelected, onEvidence }) {
           ))}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <SmallButton onClick={() => { setDecision('approved'); onEvidence?.('impact'); }} tone="bad">Approve</SmallButton>
-            <SmallButton onClick={() => { setDecision('denied'); onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['deny', 'report']); }} tone="good">Deny</SmallButton>
-            <SmallButton onClick={() => { setDecision('reported'); onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report']); }} tone="good">Report</SmallButton>
+            <SmallButton onClick={() => { setDecision('denied'); onEvidence?.('report'); }} tone="good">Deny</SmallButton>
+            <SmallButton onClick={() => { setDecision('reported'); onEvidence?.('report'); }} tone="good">Report</SmallButton>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 16 }}>
@@ -492,8 +486,8 @@ function CloudBreachSimulator({ scenario, setSelected, onEvidence }) {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <SmallButton onClick={() => { setSelectedSession(sessions.find(s => s.risk === 'Critical') || sessions[0]); onEvidence?.('session'); }} tone="info">Inspect Risky IP</SmallButton>
-            <SmallButton onClick={() => { setRevoked(true); onEvidence?.('report'); onEvidence?.('impact'); selectByKeywords(scenario, setSelected, ['revoke', 'session', 'report']); }} tone="good">Revoke Sessions</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'security']); }} tone="good">Escalate</SmallButton>
+            <SmallButton onClick={() => { setRevoked(true); onEvidence?.('report'); onEvidence?.('impact'); }} tone="good">Revoke Sessions</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Escalate</SmallButton>
           </div>
           {revoked && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', color: '#bbf7d0', fontSize: 12 }}>All risky sessions revoked. Password reset and access review queued.</div>}
         </div>
@@ -549,9 +543,9 @@ function InsiderThreatSimulator({ scenario, setSelected, onEvidence }) {
                 <div>Severity: {watched.risk > 75 ? 'High' : watched.risk > 50 ? 'Medium' : 'Low'}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                <SmallButton onClick={() => { onEvidence?.('evidence'); selectByKeywords(scenario, setSelected, ['investigate', 'monitor']); }} tone="info">Investigate Logs</SmallButton>
-                <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['escalate', 'security', 'report']); }} tone="good">Escalate Case</SmallButton>
-                <SmallButton onClick={() => { onEvidence?.('impact'); selectByKeywords(scenario, setSelected, ['ignore']); }} tone="bad">Dismiss Alert</SmallButton>
+                <SmallButton onClick={() => { onEvidence?.('evidence'); }} tone="info">Investigate Logs</SmallButton>
+                <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Escalate Case</SmallButton>
+                <SmallButton onClick={() => { onEvidence?.('impact'); }} tone="bad">Dismiss Alert</SmallButton>
               </div>
             </>
           ) : (
@@ -618,8 +612,8 @@ function WifiSpoofingSimulator({ scenario, setSelected, onEvidence }) {
           )}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <SmallButton onClick={() => { setPortal(true); onEvidence?.('technical'); }} tone="warn">Open Portal</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['official', 'vpn', 'verify']); }} tone="good">Use Official WiFi/VPN</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report']); }} tone="good">Report Rogue SSID</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('process'); }} tone="good">Use Official WiFi/VPN</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Report Rogue SSID</SmallButton>
           </div>
         </div>
       </div>
@@ -655,7 +649,7 @@ function DNSSpoofingSimulator({ scenario, setSelected, onEvidence }) {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <SmallButton onClick={() => { setCert(true); onEvidence?.('url'); }} tone="info">Inspect Certificate</SmallButton>
               <SmallButton onClick={() => { setLookup(true); onEvidence?.('technical'); }} tone="info">Run DNS Lookup</SmallButton>
-              <SmallButton onClick={() => { setWarning(true); onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'disconnect', 'verify']); }} tone="good">Stop and Report</SmallButton>
+              <SmallButton onClick={() => { setWarning(true); onEvidence?.('report'); }} tone="good">Stop and Report</SmallButton>
             </div>
             {cert && <div style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.7 }}>Certificate CN: {data.cert_subject || 'intranet-company-login.net'} / issuer mismatch detected.</div>}
             {lookup && <div style={{ fontSize: 12, color: '#fcd34d', lineHeight: 1.7 }}>Corporate resolver and public resolver disagree. Local DNS cache may be poisoned.</div>}
@@ -708,8 +702,8 @@ function DeepfakeScamSimulator({ scenario, setSelected, onEvidence }) {
           />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
             <SmallButton onClick={() => { setAnalysis(true); onEvidence?.('technical'); }} tone="info">Analyze Voice</SmallButton>
-            <SmallButton onClick={() => { setIdentityCheck(true); onEvidence?.('identity'); selectByKeywords(scenario, setSelected, ['verify', 'callback', 'channel', 'out-of-band']); }} tone="good">Verify Identity</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'security']); }} tone="good">Report Scam</SmallButton>
+            <SmallButton onClick={() => { setIdentityCheck(true); onEvidence?.('identity'); }} tone="good">Verify Identity</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Report Scam</SmallButton>
           </div>
           {identityCheck && (
             <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: '1px solid rgba(34,211,238,0.28)', background: 'rgba(34,211,238,0.08)', color: '#bae6fd', fontSize: 12, lineHeight: 1.6 }}>
@@ -812,7 +806,7 @@ function AttackChainSimulator({ scenario, setSelected, onEvidence }) {
                   </div>
                 ))}
               </div>
-              <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['contain', 'isolate', 'revoke', 'report']); }} tone="good">Select Containment Response</SmallButton>
+              <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Prepare Containment Evidence</SmallButton>
             </>
           )}
         </div>
@@ -858,8 +852,8 @@ function SmishingSimulator({ scenario, setSelected, onEvidence }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <SmallButton onClick={() => { setInspect(true); onEvidence?.('identity'); }} tone="info">Inspect Sender</SmallButton>
             <SmallButton onClick={() => { setOpened(true); onEvidence?.('url'); }} tone="bad">Open Link</SmallButton>
-            <SmallButton onClick={() => { setBlocked(true); onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'block', 'ignore']); }} tone="good">Block and Report</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['official', 'direct', 'verify']); }} tone="good">Use Official App</SmallButton>
+            <SmallButton onClick={() => { setBlocked(true); onEvidence?.('report'); }} tone="good">Block and Report</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('process'); }} tone="good">Use Official App</SmallButton>
           </div>
         </div>
       </div>
@@ -885,8 +879,8 @@ function BECSimulator({ scenario, setSelected, onEvidence }) {
             <SmallButton onClick={() => { setInvoice(true); onEvidence?.('technical'); }} tone="info">Open Invoice</SmallButton>
             <SmallButton onClick={() => { setBank(true); onEvidence?.('impact'); }} tone="warn">Compare Bank Details</SmallButton>
             <SmallButton onClick={() => { setApproval(true); onEvidence?.('process'); }} tone="info">Check Approval Chain</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('identity'); selectByKeywords(scenario, setSelected, ['verify', 'call', 'known', 'official']); }} tone="good">Verify by Phone</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'security', 'finance']); }} tone="good">Escalate Fraud</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('identity'); }} tone="good">Verify by Phone</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Escalate Fraud</SmallButton>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 16 }}>
@@ -937,9 +931,9 @@ function SupplyChainSimulator({ scenario, setSelected, onEvidence }) {
             <Signal label="SANDBOX" value={sandbox ? 'Beacon attempt' : 'Not run'} color={sandbox ? '#ef4444' : '#94a3b8'} />
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <SmallButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['block', 'rollback', 'quarantine', 'report']); }} tone="good">Block Release</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['verify', 'vendor', 'official']); }} tone="good">Verify Vendor</SmallButton>
-            <SmallButton onClick={() => { onEvidence?.('impact'); selectByKeywords(scenario, setSelected, ['install', 'approve', 'allow']); }} tone="bad">Approve Update</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('report'); }} tone="good">Block Release</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('process'); }} tone="good">Verify Vendor</SmallButton>
+            <SmallButton onClick={() => { onEvidence?.('impact'); }} tone="bad">Approve Update</SmallButton>
           </div>
         </div>
       </div>
