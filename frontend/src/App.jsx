@@ -4,7 +4,8 @@ import { ADVANCED_CATEGORIES, AdvancedScenarioPanel, IncidentResponseMode, SOCDa
 import SimulationAudioPlayer from './SimulationAudioPlayer';
 import InteractiveCorePanel from './InteractiveCoreModules';
 import { getScenarioCallerIdentity, sanitizeCallerText } from './callerIdentity';
-import { afterActionDepth, decisionAxis, getRangeIntel } from './rangeIntel';
+import { buildCaseDynamics, buildResponseOptions } from './interactionDynamics';
+import { afterActionDepth, getRangeIntel } from './rangeIntel';
 import { withUrlVariants } from './urlVariants';
 
 const DIFF = {
@@ -550,6 +551,102 @@ function RangeBriefing({ intel, color }) {
   );
 }
 
+function ActiveInvestigationBoard({ dynamics, completed, onProbe, timelineIndex, onAdvance, color, ready }) {
+  const completedSet = new Set(completed);
+  const visibleEvents = dynamics.events.slice(0, Math.max(1, timelineIndex + 1));
+  const signal = Math.min(100, Math.round((completed.length / Math.max(1, dynamics.requiredEvidence)) * 72) + (ready ? 18 : 0));
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, rgba(5,8,16,0.88), rgba(13,20,36,0.92))',
+      border: '1px solid var(--border)',
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 16,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.5px', fontWeight: 900, marginBottom: 5 }}>ACTIVE INVESTIGATION</div>
+          <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 900 }}>
+            Collect evidence before choosing a response
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>
+            {completed.length}/{dynamics.requiredEvidence} checks complete. Tempo: {dynamics.tempo}. Ambiguity: {dynamics.ambiguity}.
+          </div>
+        </div>
+        <div style={{ minWidth: 170 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: 10, fontWeight: 800, marginBottom: 6 }}>
+            <span>EVIDENCE SIGNAL</span>
+            <span>{signal}%</span>
+          </div>
+          <div style={{ height: 8, background: 'rgba(148,163,184,0.14)', borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ width: `${signal}%`, height: '100%', background: `linear-gradient(90deg, ${color}, #22d3ee)`, transition: 'width 0.25s' }} />
+          </div>
+          <div style={{ color: ready ? '#86efac' : '#fcd34d', fontSize: 11, fontWeight: 800, marginTop: 8 }}>
+            {ready ? 'Response options unlocked' : 'Response locked until evidence is collected'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, marginBottom: 14 }}>
+        {dynamics.probes.map((probe) => {
+          const done = completedSet.has(probe.id);
+          return (
+            <button key={probe.id} onClick={() => onProbe(probe.id)} disabled={done} style={{
+              textAlign: 'left',
+              padding: 13,
+              borderRadius: 10,
+              border: done ? `1px solid ${color}66` : '1px solid var(--border)',
+              background: done ? `${color}12` : 'rgba(15,23,42,0.48)',
+              color: 'var(--text-primary)',
+              fontFamily: 'inherit',
+              opacity: done ? 0.92 : 1,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+                <span style={{ fontSize: 12, fontWeight: 900 }}>{probe.label}</span>
+                <span style={{ fontSize: 10, color: done ? '#86efac' : 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  {done ? 'DONE' : `${probe.confidence}%`}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{probe.desc}</div>
+              {done && (
+                <div style={{ marginTop: 9, padding: 9, borderRadius: 8, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: '#bae6fd', fontSize: 11, lineHeight: 1.45 }}>
+                  {probe.outcome}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1fr) auto', gap: 10, alignItems: 'stretch' }}>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(5,8,16,0.45)', padding: 12 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.2px', fontWeight: 900, marginBottom: 8 }}>LIVE EVENT STREAM</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {visibleEvents.map(event => (
+              <div key={event.id} style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.45 }}>
+                <span style={{ color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, minWidth: 54 }}>{event.time}</span>
+                <span>{event.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <button onClick={onAdvance} style={{
+          minWidth: 140,
+          borderRadius: 10,
+          border: `1px solid ${color}44`,
+          background: `${color}12`,
+          color,
+          fontSize: 11,
+          fontWeight: 900,
+          fontFamily: 'inherit',
+          padding: '10px 12px',
+        }}>ADVANCE CASE CLOCK</button>
+      </div>
+    </div>
+  );
+}
+
 function normalizeWebsiteExtra(extra = {}) {
   const fake = safeUrlInfo(extra.fake_url || extra.requested_domain);
   const real = safeUrlInfo(extra.real_url || extra.official_url || 'https://official.example.com', 'https://official.example.com');
@@ -600,10 +697,12 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [completedProbes, setCompletedProbes] = useState([]);
+  const [timelineIndex, setTimelineIndex] = useState(0);
   const startTime = useRef(Date.now());
 
   const load = async () => {
-    setLoading(true); setSelected(null); setResult(null); setLoadError(''); startTime.current = Date.now();
+    setLoading(true); setSelected(null); setResult(null); setLoadError(''); setCompletedProbes([]); setTimelineIndex(0); startTime.current = Date.now();
     try {
       setScenario(await api.generateScenario(difficulty, useAi, category));
     } catch (e) {
@@ -617,7 +716,12 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   useEffect(() => { load(); }, []);
 
   const submit = async () => {
-    if (!selected) return; setSubmitting(true);
+    if (!selected) return;
+    if (!investigationReady) {
+      setLoadError('Complete the required investigation checks before submitting your response.');
+      return;
+    }
+    setSubmitting(true);
     try {
       const responseTime = (Date.now() - startTime.current) / 1000;
       const r = await api.submitAnswer(scenario.id, selected, responseTime);
@@ -658,6 +762,11 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   );
 
   const scenarioView = withUrlVariants(scenario, category);
+  const caseDynamics = buildCaseDynamics({ category, scenario: scenarioView });
+  const activeCompletedProbes = completedProbes.filter(id => caseDynamics.probes.some(probe => probe.id === id));
+  const investigationReady = activeCompletedProbes.length >= caseDynamics.requiredEvidence;
+  const responseOptions = buildResponseOptions(scenarioView.options || [], { category, scenario: scenarioView, dynamics: caseDynamics });
+  const responseScenario = { ...scenarioView, options: responseOptions };
   const websiteExtra = category === 'website' ? normalizeWebsiteExtra(scenarioView.extra_data || {}) : null;
   const callIdentity = ['vishing', 'deepfake'].includes(category)
     ? getScenarioCallerIdentity(scenarioView, scenarioView.extra_data || {}, category)
@@ -666,7 +775,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const rangeIntel = getRangeIntel({ category, scenario: scenarioView, identity: callIdentity });
 
   if (result) return (
-    <ResultView result={result} scenario={scenarioView} category={category} catInfo={catInfo} intel={rangeIntel} onNext={load} onHome={() => setPage('home')} />
+    <ResultView result={result} scenario={responseScenario} category={category} catInfo={catInfo} intel={rangeIntel} onNext={load} onHome={() => setPage('home')} />
   );
 
   // Scenario view
@@ -700,6 +809,18 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
       </div>
 
       <RangeBriefing intel={rangeIntel} color={catInfo.color} />
+      <ActiveInvestigationBoard
+        dynamics={caseDynamics}
+        completed={activeCompletedProbes}
+        onProbe={(probeId) => {
+          setLoadError('');
+          setCompletedProbes(prev => (prev.includes(probeId) ? prev : [...prev, probeId]));
+        }}
+        timelineIndex={timelineIndex}
+        onAdvance={() => setTimelineIndex(prev => Math.min(caseDynamics.events.length - 1, prev + 1))}
+        color={catInfo.color}
+        ready={investigationReady}
+      />
 
       {/* Main scenario card */}
       <div style={{
@@ -791,8 +912,13 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
       {/* Actions */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '1.5px', marginBottom: 12 }}>SELECT YOUR RESPONSE</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {(scenarioView.options || []).map((a, i) => (
+        {!investigationReady ? (
+          <div style={{ padding: 18, borderRadius: 12, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)', color: '#fde68a', fontSize: 13, lineHeight: 1.6 }}>
+            Response options are locked. Complete {caseDynamics.requiredEvidence} investigation checks above so the decision is based on evidence instead of memorized wording.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {responseOptions.map((a, i) => (
             <button key={a.id} onClick={() => setSelected(a.id)} style={{
               padding: 16, borderRadius: 12, textAlign: 'left', fontFamily: 'inherit',
               border: selected === a.id ? `1px solid ${catInfo.color}` : '1px solid var(--border)',
@@ -805,11 +931,12 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{a.label}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.desc}</div>
               <div style={{ marginTop: 9, display: 'inline-flex', padding: '4px 7px', borderRadius: 7, background: 'rgba(148,163,184,0.08)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10, fontWeight: 800, letterSpacing: '0.4px' }}>
-                Decision axis: {decisionAxis(a)}
+                Operational impact: {a.impact_label}
               </div>
             </button>
           ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {loadError && (

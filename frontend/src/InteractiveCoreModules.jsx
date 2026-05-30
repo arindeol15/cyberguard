@@ -16,9 +16,9 @@ function ActionButton({ children, onClick, tone = 'neutral' }) {
   const tones = {
     neutral: ['rgba(15,23,42,0.84)', 'var(--border)', 'var(--text-secondary)'],
     info: ['rgba(34,211,238,0.1)', 'rgba(34,211,238,0.32)', '#67e8f9'],
-    good: ['rgba(34,197,94,0.12)', 'rgba(34,197,94,0.35)', '#86efac'],
+    good: ['rgba(99,102,241,0.13)', 'rgba(99,102,241,0.36)', '#c4b5fd'],
     warn: ['rgba(245,158,11,0.12)', 'rgba(245,158,11,0.35)', '#fcd34d'],
-    bad: ['rgba(239,68,68,0.12)', 'rgba(239,68,68,0.35)', '#fca5a5'],
+    bad: ['rgba(244,63,94,0.12)', 'rgba(244,63,94,0.32)', '#fda4af'],
   };
   const [bg, border, color] = tones[tone] || tones.neutral;
   return (
