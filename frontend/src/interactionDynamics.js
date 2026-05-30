@@ -151,37 +151,120 @@ const NOISE_EVENTS = [
   'The first glance is clean; the risk appears only after inspection.',
 ];
 
-const ACTION_COPY = {
-  verify: [
-    ['Validate through a trusted path', 'Use a known source instead of the prompt, link, caller, or popup.'],
-    ['Pause and confirm independently', 'Step outside the suspicious channel before taking the requested action.'],
-    ['Use the official workflow', 'Navigate through the real portal, saved contact, or approved process.'],
-  ],
-  contain: [
-    ['Escalate with evidence', 'Preserve the indicator and move it into the security response path.'],
-    ['Contain the suspicious activity', 'Block, report, revoke, quarantine, or isolate based on the case context.'],
-    ['Open an incident response path', 'Treat the event as suspicious and keep the evidence trail intact.'],
-  ],
-  inspect: [
-    ['Gather more evidence first', 'Inspect the technical and business context before committing.'],
-    ['Run an evidence check', 'Review the supporting signal before deciding whether to trust the request.'],
-    ['Triage before acting', 'Slow down and collect enough signal to choose a defensible response.'],
-  ],
-  expose: [
-    ['Continue the requested workflow', 'Follow the prompt or caller request to keep the process moving.'],
-    ['Trust the presented request', 'Proceed based on the visible message, page, call, or alert.'],
-    ['Complete the in-channel action', 'Use the suspicious channel as if it were legitimate.'],
-  ],
-  delay: [
-    ['Defer without validating', 'Avoid immediate action, but leave the risk unresolved.'],
-    ['Dismiss the event for now', 'Treat it as low priority without proving whether it is safe.'],
-    ['Wait for more obvious signs', 'Do nothing until the case becomes clearer on its own.'],
-  ],
-  judgment: [
-    ['Choose a low-friction response', 'This may feel convenient, but it needs supporting evidence.'],
-    ['Act from current context', 'Make a decision using the evidence currently available.'],
-    ['Take the apparent next step', 'Use the surface-level story unless investigation changes it.'],
-  ],
+const AXIS_DESCRIPTIONS = {
+  verify: 'Checks the request through a trusted source outside the suspicious channel.',
+  contain: 'Preserves evidence and moves the case into the security response path.',
+  inspect: 'Collects more signal before deciding whether the request can be trusted.',
+  expose: 'Follows the suspicious request before trust has been established.',
+  delay: 'Avoids an immediate risky action, but leaves the event unresolved.',
+  judgment: 'Acts from the current context without a stronger verification signal.',
+};
+
+const CONTEXTUAL_ACTIONS = {
+  default: {
+    verify: ['Verify through a known channel', 'Use the official workflow', 'Confirm outside the suspicious channel', 'Check the trusted source first'],
+    contain: ['Report and preserve evidence', 'Escalate to security', 'Contain the suspicious activity', 'Block the request and document it'],
+    inspect: ['Inspect the supporting evidence', 'Review the technical details', 'Collect more context first', 'Triage before taking action'],
+    expose: ['Proceed with the requested action', 'Use the suspicious channel', 'Submit the requested information', 'Continue without verification'],
+    delay: ['Dismiss without confirming', 'Wait without containing it', 'Leave the alert unresolved', 'Ignore the warning for now'],
+    judgment: ['Choose based on current context', 'Take the apparent next step', 'Use the quickest available path', 'Make a limited judgment call'],
+  },
+  email: {
+    verify: ['Contact the sender through the directory', 'Open the official portal yourself', 'Confirm the request outside email'],
+    contain: ['Report the email to security', 'Quarantine the message', 'Block the sender and preserve headers'],
+    inspect: ['Inspect headers and links', 'Hover the embedded link', 'Review the attachment safely'],
+    expose: ['Open the email link', 'Reply with the requested details', 'Open the attachment from the inbox'],
+  },
+  website: {
+    verify: ['Navigate to the real site yourself', 'Use the bookmarked official portal', 'Check the service outside this page'],
+    contain: ['Close and report the URL', 'Report the cloned page', 'Block the suspicious login page'],
+    inspect: ['Inspect the address and certificate', 'Check the domain registration clues', 'Test the form behavior safely'],
+    expose: ['Enter credentials on this page', 'Submit the fake login form', 'Trust the cloned portal'],
+  },
+  qr: {
+    verify: ['Ask staff before scanning', 'Use the official app or desk', 'Verify the QR placement first'],
+    contain: ['Report the QR sticker', 'Avoid the code and document it', 'Remove the QR from use'],
+    inspect: ['Preview the QR destination', 'Inspect the scanned landing page', 'Check what the QR page requests'],
+    expose: ['Open the scanned page', 'Submit details to the QR page', 'Scan and follow the instructions'],
+  },
+  vishing: {
+    verify: ['Call back using a known number', 'Verify the caller through the directory', 'Move the request to a trusted channel'],
+    contain: ['Hang up and report the call', 'Record the request and escalate', 'Refuse and preserve the caller details'],
+    inspect: ['Let the caller explain the request', 'Record the requested action', 'Classify the phone request'],
+    expose: ['Approve what the caller asks', 'Share the requested code', 'Transfer money during the call'],
+  },
+  deepfake: {
+    verify: ['Run a trusted callback check', 'Verify the person through another channel', 'Ask for a live challenge phrase'],
+    contain: ['Report the impersonation attempt', 'Escalate the voice note', 'Block the request and preserve the transcript'],
+    inspect: ['Analyze the voice and pressure cues', 'Review the transcript markers', 'Check liveness before acting'],
+    expose: ['Follow the voice note request', 'Send the requested payment or code', 'Trust the caller voice alone'],
+  },
+  mfa: {
+    verify: ['Review sign-in activity first', 'Check the login source', 'Confirm whether you started the login'],
+    contain: ['Deny and report the push', 'Reject the prompt and revoke sessions', 'Report the approval spam'],
+    inspect: ['Count the push pattern', 'Inspect the device and IP', 'Review impossible travel signals'],
+    expose: ['Approve the push prompt', 'Authorize the unknown sign-in', 'Accept the repeated MFA request'],
+  },
+  cloud: {
+    verify: ['Check tenant activity logs', 'Validate the session owner', 'Review the account through admin tools'],
+    contain: ['Revoke risky sessions', 'Contain the cloud account', 'Escalate the SaaS incident'],
+    inspect: ['Inspect risky sessions', 'Audit external shares', 'Check token persistence'],
+    expose: ['Leave the session active', 'Trust the cloud alert as benign', 'Allow the external share'],
+  },
+  usb: {
+    verify: ['Turn the device in to IT', 'Follow removable-media policy', 'Use a controlled analysis path'],
+    contain: ['Document the USB incident', 'Preserve chain of custody', 'Quarantine the device'],
+    inspect: ['Sandbox scan the USB', 'Review the device label safely', 'Inspect files away from production'],
+    expose: ['Mount the unknown USB', 'Open files from the device', 'Run the removable media content'],
+  },
+  browser_exploit: {
+    verify: ['Use the vendor update channel', 'Close and verify the browser version', 'Check the extension in the official store'],
+    contain: ['Block and report the popup', 'Cancel the download and report', 'Stop the installer path'],
+    inspect: ['Inspect requested permissions', 'Check the download source', 'Read the browser warning'],
+    expose: ['Install the fake update', 'Run the downloaded installer', 'Grant the requested browser permissions'],
+  },
+  wifi: {
+    verify: ['Use official WiFi with VPN', 'Ask staff for the real SSID', 'Switch to a trusted network route'],
+    contain: ['Report the rogue SSID', 'Avoid the captive portal', 'Document the evil twin network'],
+    inspect: ['Compare SSID and security mode', 'Inspect the captive portal', 'Check the network route'],
+    expose: ['Join the strongest hotspot', 'Enter credentials in the portal', 'Trust the open network'],
+  },
+  dns: {
+    verify: ['Compare trusted DNS resolvers', 'Use the verified destination path', 'Check the certificate owner'],
+    contain: ['Stop and report the redirect', 'Preserve the DNS mismatch', 'Disconnect from the suspicious path'],
+    inspect: ['Inspect the certificate subject', 'Run a DNS lookup comparison', 'Check resolver and IP details'],
+    expose: ['Continue to the redirected site', 'Ignore the browser warning', 'Sign in despite the mismatch'],
+  },
+  insider: {
+    verify: ['Compare activity to role baseline', 'Check policy and access context', 'Validate the employee activity pattern'],
+    contain: ['Escalate the insider case', 'Preserve logs and evidence', 'Contain the risky account activity'],
+    inspect: ['Investigate the activity logs', 'Scope the data movement', 'Review the employee risk profile'],
+    expose: ['Dismiss the employee alert', 'Message the user before preserving logs', 'Allow the activity to continue'],
+  },
+  attack_chain: {
+    verify: ['Correlate the attack stages', 'Build the incident timeline', 'Validate the identity pivot'],
+    contain: ['Contain and report the chain', 'Revoke sessions and isolate endpoints', 'Stop the earliest active stage'],
+    inspect: ['Review each stage before deciding', 'Trace the kill chain path', 'Map the evidence across alerts'],
+    expose: ['Treat each alert separately', 'Continue the compromised workflow', 'Delay containment until later'],
+  },
+  smishing: {
+    verify: ['Use the official app', 'Check the message through the real service', 'Verify the text outside SMS'],
+    contain: ['Block and report the text', 'Report the mobile link', 'Delete after preserving details'],
+    inspect: ['Inspect the sender number', 'Preview the mobile link', 'Review the landing-page request'],
+    expose: ['Open the SMS link', 'Submit details to the text link', 'Pay through the mobile page'],
+  },
+  bec: {
+    verify: ['Call the known vendor contact', 'Check the approval chain', 'Verify payment details by phone'],
+    contain: ['Escalate the invoice fraud', 'Freeze the payment request', 'Report the BEC attempt'],
+    inspect: ['Open invoice metadata safely', 'Compare bank details', 'Review procurement records'],
+    expose: ['Release the payment', 'Use the new bank details', 'Reply inside the compromised thread'],
+  },
+  supply_chain: {
+    verify: ['Verify the vendor signature', 'Check the official release channel', 'Confirm publisher provenance'],
+    contain: ['Block the release', 'Rollback the package update', 'Quarantine the suspicious build'],
+    inspect: ['Review the package diff', 'Run the update in sandbox', 'Inspect install hooks'],
+    expose: ['Approve the package update', 'Install the unsigned release', 'Allow the build to continue'],
+  },
 };
 
 const IMPACT_LABELS = [
@@ -221,16 +304,72 @@ function classifyOption(option = {}) {
   if (/report|quarantine|block|revoke|isolate|contain|escalate|deny|hang up|stop|turn it in/.test(text)) return 'contain';
   if (/verify|official|direct|known|callback|call|portal|staff|vendor|out-of-band|fido|official app|known app/.test(text)) return 'verify';
   if (/inspect|review|check|scan|sandbox|analyze|compare|investigate|preview|look up|marketplace/.test(text)) return 'inspect';
-  if (/open|click|enter|approve|authorize|grant|consent|install|download|pay|wire|send|share|plug|allow|accept|run|sign in|log in|give/.test(text)) return 'expose';
+  if (/open|click|enter|approve|authorize|grant|consent|install|download|pay|wire|send|share|plug|allow|accept|run|sign in|log in|give|comply|trust|proceed|follow|submit|provide|type/.test(text)) return 'expose';
   if (/ignore|delete|dismiss|wait|leave|clear|discard|reply stop/.test(text)) return 'delay';
   return 'judgment';
 }
 
-function actionCopy(option, seed) {
+function cleanText(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.!?])/g, '$1')
+    .trim();
+}
+
+function isGenericLabel(label) {
+  const text = cleanText(label).toLowerCase();
+  if (!text) return true;
+  return [
+    /^report and verify$/,
+    /^use trusted channel$/,
+    /^comply with request$/,
+    /^act immediately$/,
+    /^open the link$/,
+    /^continue workflow$/,
+    /^share requested data$/,
+    /^help the sender$/,
+    /^approve the prompt$/,
+    /^stop interruptions$/,
+    /^ignore the alert$/,
+    /^assume it is normal$/,
+    /^go with.*investigation$/,
+    /^investigate$/,
+    /^investigate (login|logs|activity)$/,
+    /^verify$/,
+    /^verify (identity|by phone|dns|vendor)$/,
+    /^report$/,
+    /^report (as phishing|url|qr|call|scam)$/,
+    /^deny and report$/,
+    /^block and report$/,
+    /^escalate case$/,
+    /^stop and report$/,
+    /^revoke sessions$/,
+    /^contain (account|and report)$/,
+    /^use official (app|workflow|wifi\/vpn)$/,
+    /^use callback path$/,
+    /^open official site directly$/,
+    /^do not (install|use link|mount)$/,
+    /^avoid scanning$/,
+    /^sandbox first$/,
+    /^quarantine and report$/,
+    /^continue$/,
+  ].some(pattern => pattern.test(text));
+}
+
+function contextualLabel({ option, category, axis, seed, index, attempt = 0 }) {
+  const categoryPool = CONTEXTUAL_ACTIONS[category]?.[axis] || CONTEXTUAL_ACTIONS.default[axis] || CONTEXTUAL_ACTIONS.default.judgment;
+  return categoryPool[stableIndex(`${seed}-${option.id}-${option.label}-${index}-${attempt}`, categoryPool.length)];
+}
+
+function actionCopy(option, seed, category, index) {
   const axis = classifyOption(option);
-  const pool = ACTION_COPY[axis] || ACTION_COPY.judgment;
-  const [label, desc] = pool[stableIndex(`${seed}-${option.id}-${option.label}`, pool.length)];
-  return { axis, label, desc };
+  const originalLabel = cleanText(option.label);
+  const label = isGenericLabel(originalLabel)
+    ? contextualLabel({ option, category, axis, seed, index })
+    : originalLabel;
+  const originalDesc = cleanText(option.desc);
+  const fallbackDesc = AXIS_DESCRIPTIONS[axis] || AXIS_DESCRIPTIONS.judgment;
+  return { axis, label, desc: originalDesc && originalDesc.toLowerCase() !== originalLabel.toLowerCase() ? originalDesc : fallbackDesc };
 }
 
 export function buildCaseDynamics({ category, scenario = {} } = {}) {
@@ -263,14 +402,25 @@ export function buildCaseDynamics({ category, scenario = {} } = {}) {
 
 export function buildResponseOptions(options = [], { category, scenario = {}, dynamics = {} } = {}) {
   const seed = dynamics.seed || `${category}-${scenario.id || scenario.subject || ''}`;
-  const transformed = options.map((option) => {
-    const copy = actionCopy(option, seed);
+  const seenLabels = new Set();
+  const transformed = options.map((option, index) => {
+    const copy = actionCopy(option, seed, category, index);
+    let label = copy.label;
+    let attempt = 1;
+    while (seenLabels.has(label.toLowerCase()) && attempt < 8) {
+      label = contextualLabel({ option, category, axis: copy.axis, seed, index, attempt });
+      attempt += 1;
+    }
+    if (seenLabels.has(label.toLowerCase())) {
+      label = `${label} (${copy.axis === 'expose' ? 'risky' : copy.axis})`;
+    }
+    seenLabels.add(label.toLowerCase());
     return {
       ...option,
       original_label: option.label,
       original_desc: option.desc,
-      label: copy.label,
-      desc: `${copy.desc} Case action: ${option.label || 'Review the scenario action.'}`,
+      label,
+      desc: copy.desc,
       decision_axis: copy.axis,
       impact_label: IMPACT_LABELS[stableIndex(`${seed}-${option.id}-impact`, IMPACT_LABELS.length)],
     };

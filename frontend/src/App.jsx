@@ -764,6 +764,9 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
           url: ['url', 'address', 'domain', 'certificate'],
           scan: ['scan', 'sandbox', 'technical', 'preview'],
           session: ['session', 'activity', 'token', 'login'],
+          prompts: ['prompt', 'pattern', 'approval', 'login'],
+          baseline: ['baseline', 'role', 'schedule', 'activity'],
+          evidence: ['evidence', 'preserve', 'logs', 'activity'],
         };
         const words = aliases[signalKey] || [signalKey];
         const matched = openProbes.find(probe => {
@@ -866,7 +869,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
                 This scenario uses a popup or overlay instead of a normal URL, so the simulator is showing a safe reconstructed browser view.
               </div>
             )}
-            <FakeBrowser fakeUrl={websiteExtra.fakeUrl} realUrl={websiteExtra.realUrl} ssl={websiteExtra.sslValid} subject={scenarioView.subject} onEvidence={captureEvidence} />
+            <FakeBrowser fakeUrl={websiteExtra.fakeUrl} ssl={websiteExtra.sslValid} subject={scenarioView.subject} onEvidence={captureEvidence} />
           </div>
         )}
 
@@ -1343,17 +1346,20 @@ function StatsPage() {
 }
 
 // ── FAKE BROWSER ──
-function FakeBrowser({ fakeUrl, realUrl, ssl, subject, onEvidence }) {
+function FakeBrowser({ fakeUrl, ssl, subject, onEvidence }) {
   const [open, setOpen] = useState(false);
   const [warning, setWarning] = useState(false);
+  const [urlChecked, setUrlChecked] = useState(false);
+  const [certOpen, setCertOpen] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(true);
+  const [reported, setReported] = useState(false);
   const fake = safeUrlInfo(fakeUrl);
-  const real = safeUrlInfo(realUrl, 'https://official.example.com');
   const domain = fake.hostname;
   const sslOk = Boolean(ssl);
 
   return (
     <div>
-      <button onClick={() => { setOpen(!open); onEvidence?.('url'); onEvidence?.('technical'); }} style={{
+      <button onClick={() => { setOpen(!open); setUrlChecked(true); onEvidence?.('url'); }} style={{
         padding: '10px 18px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)',
         background: 'rgba(239,68,68,0.08)', color: '#fca5a5', fontSize: 12, fontWeight: 600,
         fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -1376,7 +1382,7 @@ function FakeBrowser({ fakeUrl, realUrl, ssl, subject, onEvidence }) {
             </div>
           </div>
 
-          <div style={{ padding: 24, minHeight: 220, background: '#fff', color: '#374151' }}>
+          <div style={{ padding: 24, minHeight: 240, background: '#fff', color: '#374151', position: 'relative' }}>
             <div style={{ textAlign: 'center', marginBottom: 18 }}>
               <div style={{ width: 50, height: 50, background: '#f3f4f6', borderRadius: 8, margin: '0 auto 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🏢</div>
               <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>Sign in to your account</div>
@@ -1388,6 +1394,14 @@ function FakeBrowser({ fakeUrl, realUrl, ssl, subject, onEvidence }) {
               <input placeholder="Password" type="password" disabled style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, marginBottom: 10, boxSizing: 'border-box', background: '#f9fafb', color: '#6b7280' }} />
               <button onClick={() => { setWarning(true); onEvidence?.('impact'); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: 'none', background: '#1a73e8', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Sign in</button>
             </div>
+
+            {popupOpen && (
+              <div style={{ position: 'absolute', right: 22, top: 22, width: 230, padding: 12, borderRadius: 10, background: '#fffbeb', border: '1px solid #f59e0b', color: '#78350f', boxShadow: '0 14px 42px rgba(15,23,42,0.18)' }}>
+                <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 5 }}>Session verification</div>
+                <div style={{ fontSize: 11, lineHeight: 1.5 }}>The page asks for password and MFA details before showing account context.</div>
+                <button onClick={() => { setPopupOpen(false); onEvidence?.('process'); }} style={{ marginTop: 9, padding: '6px 10px', borderRadius: 7, border: '1px solid #d97706', background: '#fff7ed', color: '#92400e', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Close popup</button>
+              </div>
+            )}
 
             <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 20, paddingTop: 10, textAlign: 'center' }}>
               <span style={{ fontSize: 10, color: '#d1d5db' }}>© 2021 {domain}. All rights reserved.</span>
@@ -1401,10 +1415,34 @@ function FakeBrowser({ fakeUrl, realUrl, ssl, subject, onEvidence }) {
                 Credentials would be sent to the attacker at <strong style={{ fontFamily: 'monospace' }}>{domain}</strong>.
               </div>
               <div style={{ fontSize: 11, lineHeight: 1.6 }}>
-                <div>Fake: <span style={{ fontFamily: 'monospace' }}>{fake.displayUrl}</span></div>
-                <div>Real: <span style={{ fontFamily: 'monospace', color: '#86efac' }}>{real.displayUrl}</span></div>
+                <div>Captured URL: <span style={{ fontFamily: 'monospace' }}>{fake.displayUrl}</span></div>
+                <div>Safe action: close this page and navigate from a trusted bookmark or official app.</div>
               </div>
               <button onClick={() => { setOpen(false); setWarning(false); }} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 6, border: '1px solid #fff', background: 'transparent', color: '#fff', fontSize: 11, fontFamily: 'inherit' }}>Close</button>
+            </div>
+          )}
+
+          <div style={{ padding: 14, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', background: 'rgba(5,8,16,0.92)' }}>
+            <button onClick={() => { setUrlChecked(true); onEvidence?.('url'); }} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(34,211,238,0.32)', background: 'rgba(34,211,238,0.1)', color: '#67e8f9', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Inspect address</button>
+            <button onClick={() => { setCertOpen(true); onEvidence?.('technical'); }} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(34,211,238,0.32)', background: 'rgba(34,211,238,0.1)', color: '#67e8f9', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Inspect certificate</button>
+            <button onClick={() => { setPopupOpen(false); onEvidence?.('process'); }} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.12)', color: '#fcd34d', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Close popup</button>
+            <button onClick={() => { setReported(true); onEvidence?.('report'); }} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(99,102,241,0.36)', background: 'rgba(99,102,241,0.13)', color: '#c4b5fd', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Report page</button>
+          </div>
+
+          {(urlChecked || certOpen || reported) && (
+            <div style={{ padding: 14, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, background: 'rgba(5,8,16,0.72)' }}>
+              <div style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(15,23,42,0.7)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 4 }}>ADDRESS CHECK</div>
+                <div style={{ fontSize: 12, color: urlChecked ? '#f59e0b' : '#94a3b8', fontWeight: 800 }}>{urlChecked ? 'Lookalike domain under review' : 'Not inspected'}</div>
+              </div>
+              <div style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(15,23,42,0.7)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 4 }}>CERTIFICATE</div>
+                <div style={{ fontSize: 12, color: certOpen ? (sslOk ? '#f59e0b' : '#ef4444') : '#94a3b8', fontWeight: 800 }}>{certOpen ? (sslOk ? 'Encrypted, ownership still untrusted' : 'Warning or issuer mismatch') : 'Not inspected'}</div>
+              </div>
+              <div style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(15,23,42,0.7)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 4 }}>CASE STATUS</div>
+                <div style={{ fontSize: 12, color: reported ? '#86efac' : '#94a3b8', fontWeight: 800 }}>{reported ? 'Reported with URL evidence' : 'Unreported'}</div>
+              </div>
             </div>
           )}
         </div>
