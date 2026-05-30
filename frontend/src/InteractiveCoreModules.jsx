@@ -59,16 +59,16 @@ function Shell({ label, children }) {
   );
 }
 
-export default function InteractiveCorePanel({ category, scenario, setSelected }) {
+export default function InteractiveCorePanel({ category, scenario, setSelected, onEvidence }) {
   if (!scenario) return null;
-  if (category === 'email') return <EmailInvestigation scenario={scenario} setSelected={setSelected} />;
-  if (category === 'qr') return <QRScannerInvestigation scenario={scenario} setSelected={setSelected} />;
-  if (category === 'vishing') return <VishingCallFlow scenario={scenario} setSelected={setSelected} />;
-  if (category === 'usb') return <USBDesktopInvestigation scenario={scenario} setSelected={setSelected} />;
+  if (category === 'email') return <EmailInvestigation scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
+  if (category === 'qr') return <QRScannerInvestigation scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
+  if (category === 'vishing') return <VishingCallFlow scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
+  if (category === 'usb') return <USBDesktopInvestigation scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
   return null;
 }
 
-function EmailInvestigation({ scenario, setSelected }) {
+function EmailInvestigation({ scenario, setSelected, onEvidence }) {
   const [headers, setHeaders] = useState(false);
   const [link, setLink] = useState(false);
   const [attachment, setAttachment] = useState(false);
@@ -90,11 +90,11 @@ function EmailInvestigation({ scenario, setSelected }) {
           </div>
           <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', minHeight: 180 }}>{scenario.body}</div>
           <div style={{ padding: 14, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <ActionButton onClick={() => setHeaders(true)} tone="info">Inspect Sender</ActionButton>
-            <ActionButton onClick={() => setLink(true)} tone="warn">Hover Link</ActionButton>
-            <ActionButton onClick={() => setAttachment(true)} tone="bad">Open Attachment</ActionButton>
-            <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'security'])} tone="good">Report Email</ActionButton>
-            <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['verify', 'official', 'direct'])} tone="good">Verify Officially</ActionButton>
+            <ActionButton onClick={() => { setHeaders(true); onEvidence?.('identity'); }} tone="info">Inspect Sender</ActionButton>
+            <ActionButton onClick={() => { setLink(true); onEvidence?.('url'); }} tone="warn">Hover Link</ActionButton>
+            <ActionButton onClick={() => { setAttachment(true); onEvidence?.('technical'); }} tone="bad">Open Attachment</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'security']); }} tone="good">Report Email</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['verify', 'official', 'direct']); }} tone="good">Verify Officially</ActionButton>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 12 }}>
@@ -161,7 +161,7 @@ function WebsiteInvestigation({ scenario, setSelected }) {
   );
 }
 
-function QRScannerInvestigation({ scenario, setSelected }) {
+function QRScannerInvestigation({ scenario, setSelected, onEvidence }) {
   const data = scenario.extra_data || {};
   const [scan, setScan] = useState(false);
   const [pageOpen, setPageOpen] = useState(false);
@@ -169,7 +169,7 @@ function QRScannerInvestigation({ scenario, setSelected }) {
   const target = data.actual_destination || data.qr_url || data.claimed_purpose || 'https://unknown-qr.example/login';
   const claim = data.claimed_purpose || 'secure registration';
   const host = target.replace(/^https?:\/\//, '').split('/')[0] || 'unknown-qr.example';
-  const openFakePage = () => { setScan(true); setPageOpen(true); };
+  const openFakePage = () => { setScan(true); setPageOpen(true); onEvidence?.('url'); };
 
   return (
     <Shell label="MOBILE QR SCANNER">
@@ -182,7 +182,7 @@ function QRScannerInvestigation({ scenario, setSelected }) {
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: scan ? '#67e8f9' : '#64748b', fontSize: 12, fontWeight: 800 }}>{scan ? 'QR DETECTED' : 'POINT CAMERA AT CODE'}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <ActionButton onClick={() => setScan(true)} tone="info">Scan Code</ActionButton>
+            <ActionButton onClick={() => { setScan(true); onEvidence?.('scan'); }} tone="info">Scan Code</ActionButton>
             <ActionButton onClick={openFakePage} tone="warn">Open Page</ActionButton>
           </div>
         </div>
@@ -198,8 +198,8 @@ function QRScannerInvestigation({ scenario, setSelected }) {
               )}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <ActionButton onClick={openFakePage} tone="warn">Open Scanned Page</ActionButton>
-                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual'])} tone="good">Verify Officially</ActionButton>
-                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid'])} tone="good">Report QR</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual']); }} tone="good">Verify Officially</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid']); }} tone="good">Report QR</ActionButton>
               </div>
             </div>
           ) : (
@@ -213,7 +213,7 @@ function QRScannerInvestigation({ scenario, setSelected }) {
                   <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, marginBottom: 16 }}>Complete verification to continue. This page was opened from the scanned QR code and is requesting account details before showing the service.</div>
                   <input disabled placeholder="Work email" style={{ width: '100%', maxWidth: 340, padding: 11, borderRadius: 7, border: '1px solid #cbd5e1', marginBottom: 8, background: '#fff', color: '#64748b' }} />
                   <input disabled placeholder="Password or payment code" style={{ width: '100%', maxWidth: 340, padding: 11, borderRadius: 7, border: '1px solid #cbd5e1', marginBottom: 12, background: '#fff', color: '#64748b' }} />
-                  <button onClick={() => setSubmitted(true)} style={{ width: '100%', maxWidth: 340, padding: 11, border: 'none', borderRadius: 7, background: '#2563eb', color: '#fff', fontWeight: 900, fontFamily: 'inherit' }}>Continue</button>
+                  <button onClick={() => { setSubmitted(true); onEvidence?.('impact'); }} style={{ width: '100%', maxWidth: 340, padding: 11, border: 'none', borderRadius: 7, background: '#2563eb', color: '#fff', fontWeight: 900, fontFamily: 'inherit' }}>Continue</button>
                 </div>
                 {submitted && (
                   <div style={{ marginTop: 16, padding: 12, borderRadius: 10, background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', fontSize: 12, fontWeight: 800 }}>
@@ -222,8 +222,8 @@ function QRScannerInvestigation({ scenario, setSelected }) {
                 )}
               </div>
               <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual'])} tone="good">Verify Officially</ActionButton>
-                <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid'])} tone="good">Report QR</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['official', 'staff', 'reception', 'manual']); }} tone="good">Verify Officially</ActionButton>
+                <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'ignore', 'walk', 'avoid']); }} tone="good">Report QR</ActionButton>
                 <ActionButton onClick={() => setPageOpen(false)} tone="neutral">Close Page</ActionButton>
               </div>
             </>
@@ -234,7 +234,7 @@ function QRScannerInvestigation({ scenario, setSelected }) {
   );
 }
 
-function VishingCallFlow({ scenario, setSelected }) {
+function VishingCallFlow({ scenario, setSelected, onEvidence }) {
   const data = scenario.extra_data || {};
   const [answered, setAnswered] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -248,8 +248,8 @@ function VishingCallFlow({ scenario, setSelected }) {
           <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900 }}>{data.caller_name || scenario.sender_name || scenario.subject}</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{data.caller_id || 'Unknown caller ID'}</div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
-            <ActionButton onClick={() => setAnswered(true)} tone="info">Answer</ActionButton>
-            <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['hang up', 'refuse', 'deny'])} tone="good">Reject</ActionButton>
+            <ActionButton onClick={() => { setAnswered(true); onEvidence?.('audio'); }} tone="info">Answer</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['hang up', 'refuse', 'deny']); }} tone="good">Reject</ActionButton>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 16 }}>
@@ -260,9 +260,9 @@ function VishingCallFlow({ scenario, setSelected }) {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <ActionButton onClick={() => setMuted(v => !v)} tone="neutral">{muted ? 'Unmute' : 'Mute'}</ActionButton>
-            <ActionButton onClick={() => setNote(true)} tone="info">Log Evidence</ActionButton>
-            <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['verify', 'known', 'direct', 'call bank'])} tone="good">Verify Caller</ActionButton>
-            <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['report', 'hang up', 'refuse'])} tone="good">Report Call</ActionButton>
+            <ActionButton onClick={() => { setNote(true); onEvidence?.('technical'); }} tone="info">Record Request</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('identity'); selectByKeywords(scenario, setSelected, ['verify', 'known', 'direct', 'call bank']); }} tone="good">Verify Caller</ActionButton>
+            <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['report', 'hang up', 'refuse']); }} tone="good">Report Call</ActionButton>
           </div>
           {note && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)', color: '#fde68a', fontSize: 12, lineHeight: 1.6 }}>Evidence note saved: caller identity, requested data, urgency language, and callback mismatch.</div>}
         </div>
@@ -271,7 +271,7 @@ function VishingCallFlow({ scenario, setSelected }) {
   );
 }
 
-function USBDesktopInvestigation({ scenario, setSelected }) {
+function USBDesktopInvestigation({ scenario, setSelected, onEvidence }) {
   const data = scenario.extra_data || {};
   const [mounted, setMounted] = useState(false);
   const [scan, setScan] = useState(false);
@@ -304,10 +304,10 @@ function USBDesktopInvestigation({ scenario, setSelected }) {
           </div>
         </div>
         <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--border)' }}>
-          <ActionButton onClick={() => setMounted(true)} tone="bad">Mount Device</ActionButton>
-          <ActionButton onClick={() => setScan(true)} tone="info">Sandbox Scan</ActionButton>
-          <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['it', 'security', 'scan', 'turn'])} tone="good">Turn In To IT</ActionButton>
-          <ActionButton onClick={() => selectByKeywords(scenario, setSelected, ['ignore', 'discard', 'report'])} tone="good">Document Incident</ActionButton>
+          <ActionButton onClick={() => { setMounted(true); onEvidence?.('impact'); }} tone="bad">Mount Device</ActionButton>
+          <ActionButton onClick={() => { setScan(true); onEvidence?.('scan'); }} tone="info">Sandbox Scan</ActionButton>
+          <ActionButton onClick={() => { onEvidence?.('process'); selectByKeywords(scenario, setSelected, ['it', 'security', 'scan', 'turn']); }} tone="good">Turn In To IT</ActionButton>
+          <ActionButton onClick={() => { onEvidence?.('report'); selectByKeywords(scenario, setSelected, ['ignore', 'discard', 'report']); }} tone="good">Document Incident</ActionButton>
         </div>
       </div>
     </Shell>

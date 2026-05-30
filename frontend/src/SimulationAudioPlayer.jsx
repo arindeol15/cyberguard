@@ -47,6 +47,7 @@ export default function SimulationAudioPlayer({
   rate = 0.92,
   pitch = 0.86,
   accent = '#22c55e',
+  onEvidence = null,
 }) {
   const audioRef = useRef(null);
   const utteranceRef = useRef(null);
@@ -206,6 +207,7 @@ export default function SimulationAudioPlayer({
   };
 
   const play = async () => {
+    onEvidence?.('audio');
     if (audioSrc && mode === 'file') await playFile();
     else await playSpeech();
   };
@@ -223,6 +225,7 @@ export default function SimulationAudioPlayer({
   };
 
   const resume = async () => {
+    onEvidence?.('audio');
     if (mode === 'file' && audioRef.current) {
       await audioRef.current.play();
       setStatus('playing');
@@ -237,6 +240,7 @@ export default function SimulationAudioPlayer({
   };
 
   const replay = async () => {
+    onEvidence?.('audio');
     clearTimer();
     setProgress(0);
     pausedAtRef.current = 0;
@@ -327,7 +331,7 @@ export default function SimulationAudioPlayer({
           {error}
         </div>
       )}
-      <button onClick={() => setShowTranscript(v => !v)} style={{ marginTop: 12, border: 'none', background: 'transparent', color: 'var(--accent-cyan)', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>
+      <button onClick={() => { setShowTranscript(v => !v); onEvidence?.('technical'); }} style={{ marginTop: 12, border: 'none', background: 'transparent', color: 'var(--accent-cyan)', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>
         {showTranscript ? 'Hide transcript' : 'Show transcript'}
       </button>
       {showTranscript && (

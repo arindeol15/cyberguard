@@ -551,10 +551,11 @@ function RangeBriefing({ intel, color }) {
   );
 }
 
-function ActiveInvestigationBoard({ dynamics, completed, onProbe, timelineIndex, onAdvance, color, ready }) {
+function InvestigationProgressStrip({ dynamics, completed, timelineIndex, color, ready }) {
   const completedSet = new Set(completed);
   const visibleEvents = dynamics.events.slice(0, Math.max(1, timelineIndex + 1));
   const signal = Math.min(100, Math.round((completed.length / Math.max(1, dynamics.requiredEvidence)) * 72) + (ready ? 18 : 0));
+  const completedProbes = dynamics.probes.filter(probe => completedSet.has(probe.id));
 
   return (
     <div style={{
@@ -566,12 +567,12 @@ function ActiveInvestigationBoard({ dynamics, completed, onProbe, timelineIndex,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.5px', fontWeight: 900, marginBottom: 5 }}>ACTIVE INVESTIGATION</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.5px', fontWeight: 900, marginBottom: 5 }}>INVESTIGATION PROGRESS</div>
           <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 900 }}>
-            Collect evidence before choosing a response
+            Evidence is captured from the simulator controls above
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>
-            {completed.length}/{dynamics.requiredEvidence} checks complete. Tempo: {dynamics.tempo}. Ambiguity: {dynamics.ambiguity}.
+            {completed.length}/{dynamics.requiredEvidence} checks complete. Interact with the page, call, file, QR, or dashboard to unlock the response.
           </div>
         </div>
         <div style={{ minWidth: 170 }}>
@@ -589,59 +590,36 @@ function ActiveInvestigationBoard({ dynamics, completed, onProbe, timelineIndex,
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, marginBottom: 14 }}>
-        {dynamics.probes.map((probe) => {
-          const done = completedSet.has(probe.id);
-          return (
-            <button key={probe.id} onClick={() => onProbe(probe.id)} disabled={done} style={{
-              textAlign: 'left',
-              padding: 13,
-              borderRadius: 10,
-              border: done ? `1px solid ${color}66` : '1px solid var(--border)',
-              background: done ? `${color}12` : 'rgba(15,23,42,0.48)',
-              color: 'var(--text-primary)',
-              fontFamily: 'inherit',
-              opacity: done ? 0.92 : 1,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
-                <span style={{ fontSize: 12, fontWeight: 900 }}>{probe.label}</span>
-                <span style={{ fontSize: 10, color: done ? '#86efac' : 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
-                  {done ? 'DONE' : `${probe.confidence}%`}
-                </span>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{probe.desc}</div>
-              {done && (
-                <div style={{ marginTop: 9, padding: 9, borderRadius: 8, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: '#bae6fd', fontSize: 11, lineHeight: 1.45 }}>
-                  {probe.outcome}
-                </div>
-              )}
-            </button>
-          );
-        })}
+        {completedProbes.length ? completedProbes.map((probe) => (
+          <div key={probe.id} style={{
+            padding: 12,
+            borderRadius: 10,
+            border: `1px solid ${color}55`,
+            background: `${color}10`,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+              <span style={{ fontSize: 12, fontWeight: 900, color: 'var(--text-primary)' }}>{probe.label}</span>
+              <span style={{ fontSize: 10, color: '#86efac', fontFamily: "'JetBrains Mono', monospace", fontWeight: 900 }}>CAPTURED</span>
+            </div>
+            <div style={{ color: '#bae6fd', fontSize: 11, lineHeight: 1.45 }}>{probe.outcome}</div>
+          </div>
+        )) : (
+          <div style={{ gridColumn: '1 / -1', padding: 12, borderRadius: 10, border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6 }}>
+            No evidence captured yet. Use the realistic controls in this scenario rather than this panel.
+          </div>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1fr) auto', gap: 10, alignItems: 'stretch' }}>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(5,8,16,0.45)', padding: 12 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.2px', fontWeight: 900, marginBottom: 8 }}>LIVE EVENT STREAM</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {visibleEvents.map(event => (
-              <div key={event.id} style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.45 }}>
-                <span style={{ color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, minWidth: 54 }}>{event.time}</span>
-                <span>{event.text}</span>
-              </div>
-            ))}
-          </div>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(5,8,16,0.45)', padding: 12 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1.2px', fontWeight: 900, marginBottom: 8 }}>LIVE EVENT STREAM</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {visibleEvents.map(event => (
+            <div key={event.id} style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.45 }}>
+              <span style={{ color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, minWidth: 54 }}>{event.time}</span>
+              <span>{event.text}</span>
+            </div>
+          ))}
         </div>
-        <button onClick={onAdvance} style={{
-          minWidth: 140,
-          borderRadius: 10,
-          border: `1px solid ${color}44`,
-          background: `${color}12`,
-          color,
-          fontSize: 11,
-          fontWeight: 900,
-          fontFamily: 'inherit',
-          padding: '10px 12px',
-        }}>ADVANCE CASE CLOCK</button>
       </div>
     </div>
   );
@@ -698,11 +676,12 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [completedProbes, setCompletedProbes] = useState([]);
+  const [capturedSignals, setCapturedSignals] = useState([]);
   const [timelineIndex, setTimelineIndex] = useState(0);
   const startTime = useRef(Date.now());
 
   const load = async () => {
-    setLoading(true); setSelected(null); setResult(null); setLoadError(''); setCompletedProbes([]); setTimelineIndex(0); startTime.current = Date.now();
+    setLoading(true); setSelected(null); setResult(null); setLoadError(''); setCompletedProbes([]); setCapturedSignals([]); setTimelineIndex(0); startTime.current = Date.now();
     try {
       setScenario(await api.generateScenario(difficulty, useAi, category));
     } catch (e) {
@@ -767,6 +746,36 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
   const investigationReady = activeCompletedProbes.length >= caseDynamics.requiredEvidence;
   const responseOptions = buildResponseOptions(scenarioView.options || [], { category, scenario: scenarioView, dynamics: caseDynamics });
   const responseScenario = { ...scenarioView, options: responseOptions };
+  const captureEvidence = (signal = 'interaction') => {
+    const signalKey = String(signal || 'interaction').toLowerCase();
+    setLoadError('');
+    setCapturedSignals(prevSignals => {
+      if (prevSignals.includes(signalKey)) return prevSignals;
+      setCompletedProbes(prev => {
+        const openProbes = caseDynamics.probes.filter(probe => !prev.includes(probe.id));
+        if (!openProbes.length) return prev;
+        const aliases = {
+          audio: ['voice', 'caller', 'request', 'liveness'],
+          identity: ['identity', 'sender', 'caller', 'callback', 'liveness'],
+          technical: ['technical', 'certificate', 'url', 'address', 'resolver', 'permission', 'sandbox', 'scan'],
+          process: ['business', 'process', 'approval', 'workflow', 'vendor'],
+          impact: ['impact', 'blast', 'scope', 'data', 'session'],
+          report: ['impact', 'business', 'identity', 'contain'],
+          url: ['url', 'address', 'domain', 'certificate'],
+          scan: ['scan', 'sandbox', 'technical', 'preview'],
+          session: ['session', 'activity', 'token', 'login'],
+        };
+        const words = aliases[signalKey] || [signalKey];
+        const matched = openProbes.find(probe => {
+          const haystack = `${probe.key} ${probe.label} ${probe.desc}`.toLowerCase();
+          return words.some(word => haystack.includes(word));
+        });
+        return [...prev, (matched || openProbes[0]).id];
+      });
+      setTimelineIndex(prev => Math.min(caseDynamics.events.length - 1, prev + 1));
+      return [...prevSignals, signalKey];
+    });
+  };
   const websiteExtra = category === 'website' ? normalizeWebsiteExtra(scenarioView.extra_data || {}) : null;
   const callIdentity = ['vishing', 'deepfake'].includes(category)
     ? getScenarioCallerIdentity(scenarioView, scenarioView.extra_data || {}, category)
@@ -809,18 +818,6 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
       </div>
 
       <RangeBriefing intel={rangeIntel} color={catInfo.color} />
-      <ActiveInvestigationBoard
-        dynamics={caseDynamics}
-        completed={activeCompletedProbes}
-        onProbe={(probeId) => {
-          setLoadError('');
-          setCompletedProbes(prev => (prev.includes(probeId) ? prev : [...prev, probeId]));
-        }}
-        timelineIndex={timelineIndex}
-        onAdvance={() => setTimelineIndex(prev => Math.min(caseDynamics.events.length - 1, prev + 1))}
-        color={catInfo.color}
-        ready={investigationReady}
-      />
 
       {/* Main scenario card */}
       <div style={{
@@ -869,7 +866,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
                 This scenario uses a popup or overlay instead of a normal URL, so the simulator is showing a safe reconstructed browser view.
               </div>
             )}
-            <FakeBrowser fakeUrl={websiteExtra.fakeUrl} realUrl={websiteExtra.realUrl} ssl={websiteExtra.sslValid} subject={scenarioView.subject} />
+            <FakeBrowser fakeUrl={websiteExtra.fakeUrl} realUrl={websiteExtra.realUrl} ssl={websiteExtra.sslValid} subject={scenarioView.subject} onEvidence={captureEvidence} />
           </div>
         )}
 
@@ -882,6 +879,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
                 difficulty={scenarioView.difficulty}
                 extraData={scenarioView.extra_data}
                 callerIdentity={callIdentity}
+                onEvidence={captureEvidence}
               />
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
                 <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenarioView.extra_data.caller_id || 'Unknown caller ID'}</span></div>
@@ -905,8 +903,17 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
           </div>
         )}
 
-        <InteractiveCorePanel category={category} scenario={scenarioView} selected={selected} setSelected={setSelected} />
-        <AdvancedScenarioPanel category={category} scenario={scenarioView} selected={selected} setSelected={setSelected} />
+        <InteractiveCorePanel category={category} scenario={scenarioView} selected={selected} setSelected={setSelected} onEvidence={captureEvidence} />
+        <AdvancedScenarioPanel category={category} scenario={scenarioView} selected={selected} setSelected={setSelected} onEvidence={captureEvidence} />
+        <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'rgba(5,8,16,0.28)' }}>
+          <InvestigationProgressStrip
+            dynamics={caseDynamics}
+            completed={activeCompletedProbes}
+            timelineIndex={timelineIndex}
+            color={catInfo.color}
+            ready={investigationReady}
+          />
+        </div>
       </div>
 
       {/* Actions */}
@@ -914,7 +921,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '1.5px', marginBottom: 12 }}>SELECT YOUR RESPONSE</div>
         {!investigationReady ? (
           <div style={{ padding: 18, borderRadius: 12, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)', color: '#fde68a', fontSize: 13, lineHeight: 1.6 }}>
-            Response options are locked. Complete {caseDynamics.requiredEvidence} investigation checks above so the decision is based on evidence instead of memorized wording.
+            Response options are locked. Use the simulator controls to capture {caseDynamics.requiredEvidence} pieces of evidence so the decision is based on what you investigated, not memorized wording.
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -945,7 +952,13 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         </div>
       )}
 
-      {selected && (
+      {selected && !investigationReady && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)', color: '#fde68a', fontSize: 12 }}>
+          Response selected, but submission stays locked until enough evidence is captured from the simulator above.
+        </div>
+      )}
+
+      {selected && investigationReady && (
         <button onClick={submit} disabled={submitting} style={{
           width: '100%', padding: 14, borderRadius: 12, border: 'none',
           background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
@@ -1330,7 +1343,7 @@ function StatsPage() {
 }
 
 // ── FAKE BROWSER ──
-function FakeBrowser({ fakeUrl, realUrl, ssl, subject }) {
+function FakeBrowser({ fakeUrl, realUrl, ssl, subject, onEvidence }) {
   const [open, setOpen] = useState(false);
   const [warning, setWarning] = useState(false);
   const fake = safeUrlInfo(fakeUrl);
@@ -1340,7 +1353,7 @@ function FakeBrowser({ fakeUrl, realUrl, ssl, subject }) {
 
   return (
     <div>
-      <button onClick={() => setOpen(!open)} style={{
+      <button onClick={() => { setOpen(!open); onEvidence?.('url'); onEvidence?.('technical'); }} style={{
         padding: '10px 18px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)',
         background: 'rgba(239,68,68,0.08)', color: '#fca5a5', fontSize: 12, fontWeight: 600,
         fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -1373,7 +1386,7 @@ function FakeBrowser({ fakeUrl, realUrl, ssl, subject }) {
             <div style={{ maxWidth: 280, margin: '0 auto' }}>
               <input placeholder="Email or username" disabled style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, marginBottom: 8, boxSizing: 'border-box', background: '#f9fafb', color: '#6b7280' }} />
               <input placeholder="Password" type="password" disabled style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, marginBottom: 10, boxSizing: 'border-box', background: '#f9fafb', color: '#6b7280' }} />
-              <button onClick={() => setWarning(true)} style={{ width: '100%', padding: 10, borderRadius: 6, border: 'none', background: '#1a73e8', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Sign in</button>
+              <button onClick={() => { setWarning(true); onEvidence?.('impact'); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: 'none', background: '#1a73e8', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Sign in</button>
             </div>
 
             <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 20, paddingTop: 10, textAlign: 'center' }}>
@@ -1505,7 +1518,7 @@ function ThreatMap() {
 }
 
 // ── QR CODE ──
-function QRCode({ url }) {
+function QRCode({ url, onEvidence }) {
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&color=ffffff&bgcolor=0a0f1c`;
   const [reveal, setReveal] = useState(false);
 
@@ -1519,7 +1532,7 @@ function QRCode({ url }) {
         </div>
       </div>
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>Scan with phone camera</div>
-      <button onClick={() => setReveal(!reveal)} style={{
+      <button onClick={() => { setReveal(!reveal); onEvidence?.('url'); }} style={{
         fontSize: 11, padding: '6px 14px', borderRadius: 6, border: 'none', marginTop: 8,
         background: 'rgba(239,68,68,0.15)', color: '#fca5a5', fontWeight: 600, fontFamily: 'inherit',
       }}>{reveal ? 'Hide' : 'Reveal destination'}</button>
@@ -1534,7 +1547,7 @@ function QRCode({ url }) {
 }
 
 // ── VISHING PLAYER ──
-function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, callerIdentity }) {
+function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, callerIdentity, onEvidence }) {
   const identity = callerIdentity || { name: 'Avery Brooks', role: 'Verification Agent', org: 'Security Desk', voiceHint: 'caller' };
   const difficultyKey = String(difficulty || '').toLowerCase();
   const namePattern = 'Sarah|Kevin|Maya|Marcus|Elena|Daniel|Priya|Thomas|Nadia|Owen|Avery|Riley|Samira|Jonah|Nina|Adrian|Jordan|Sofia|Laura|Victor';
@@ -1611,6 +1624,7 @@ function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, call
         voiceHint={voiceProfile}
         rate={rate}
         pitch={pitch}
+        onEvidence={() => onEvidence?.('audio')}
       />
     </div>
   );
