@@ -24,7 +24,7 @@ if APP_ENV == "production" and not CORS_ORIGINS:
 if not CORS_ORIGINS:
     CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
-app = FastAPI(title="CyberGuard API", version="2.2.0")
+app = FastAPI(title="CyberGuard API", version="2.2.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
