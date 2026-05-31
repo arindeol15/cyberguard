@@ -71,9 +71,20 @@ function Signal({ label, value, color = 'var(--accent-cyan)' }) {
   return (
     <div style={{ ...cardStyle, padding: 12 }}>
       <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 5 }}>{label}</div>
-      <div style={{ fontSize: 13, color, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{value}</div>
+      <div style={{ fontSize: 13, color, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{displayText(value)}</div>
     </div>
   );
+}
+
+function displayText(value, fallback = 'Not provided') {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (Array.isArray(value)) return value.map(item => displayText(item, '')).filter(Boolean).join(', ') || fallback;
+  if (typeof value === 'object') {
+    const preferred = value.name ?? value.label ?? value.value ?? value.text ?? value.title ?? value.status;
+    if (preferred !== undefined) return displayText(preferred, fallback);
+    return Object.values(value).map(item => displayText(item, '')).filter(Boolean).slice(0, 3).join(', ') || fallback;
+  }
+  return String(value);
 }
 
 function listValue(value, fallback = []) {
@@ -161,7 +172,7 @@ function ChatScamSimulator({ scenario, setSelected, onEvidence }) {
     { from: 'Maya Chen', role: 'HR Operations', text: 'Can you open the updated payroll file before 3 PM? The CFO needs confirmation.' },
     { from: 'Maya Chen', role: 'HR Operations', text: 'It is easier if you sign in with your work account. The link expires soon.' },
     { from: 'You', role: 'Security Analyst', text: 'I do not see a ticket for this request.' },
-  ]);
+  ]).map(message => typeof message === 'object' && message !== null ? message : { from: 'External user', role: 'Guest', text: displayText(message) });
   const [inspected, setInspected] = useState(false);
   const [fileOpen, setFileOpen] = useState(false);
   const [reply, setReply] = useState('');
@@ -210,8 +221,8 @@ function ChatScamSimulator({ scenario, setSelected, onEvidence }) {
                   background: own ? 'rgba(99,102,241,0.16)' : 'rgba(15,23,42,0.9)',
                   border: '1px solid var(--border)',
                 }}>
-                  <div style={{ fontSize: 11, color: own ? '#a5b4fc' : '#5eead4', fontWeight: 700 }}>{m.from} <span style={muted}>/ {m.role}</span></div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 5, lineHeight: 1.6 }}>{m.text}</div>
+                  <div style={{ fontSize: 11, color: own ? '#a5b4fc' : '#5eead4', fontWeight: 700 }}>{displayText(m.from)} <span style={muted}>/ {displayText(m.role, 'Guest')}</span></div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 5, lineHeight: 1.6 }}>{displayText(m.text)}</div>
                 </div>
               );
             })}
@@ -253,7 +264,7 @@ function AttachmentSandbox({ scenario, setSelected, onEvidence }) {
   const [scan, setScan] = useState(false);
   const [opened, setOpened] = useState(false);
   const filename = data.filename || 'Quarterly_Bonus_Report.pdf.exe';
-  const detections = listValue(data.detections, ['Double extension', 'Unsigned executable', 'Macro launcher', 'Suspicious child process']);
+  const detections = listValue(data.detections, ['Double extension', 'Unsigned executable', 'Macro launcher', 'Suspicious child process']).map(item => displayText(item));
 
   return (
     <PanelShell label="ATTACHMENT SANDBOX">
@@ -444,7 +455,7 @@ function CloudBreachSimulator({ scenario, setSelected, onEvidence }) {
     { app: 'OneDrive', ip: '103.77.41.9', location: 'Singapore', risk: 'High', time: '08:17' },
     { app: 'Google Workspace', ip: '45.141.84.12', location: 'Amsterdam', risk: 'Critical', time: '08:24' },
     { app: 'Dropbox', ip: '10.0.4.22', location: 'Office VPN', risk: 'Low', time: '09:02' },
-  ]);
+  ]).map((session, index) => typeof session === 'object' && session !== null ? session : { app: `Cloud session ${index + 1}`, ip: 'Unknown IP', location: displayText(session), risk: 'High', time: 'Recent' });
 
   return (
     <PanelShell label="CLOUD BREACH WORKBENCH">
@@ -452,7 +463,7 @@ function CloudBreachSimulator({ scenario, setSelected, onEvidence }) {
         <div style={{ ...cardStyle, padding: 16 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '1px', marginBottom: 12 }}>LOGIN HISTORY</div>
           {sessions.map((s, i) => (
-            <button key={`${s.app}-${s.ip}`} onClick={() => setSelectedSession(s)} style={{
+            <button key={`${displayText(s.app)}-${displayText(s.ip)}-${i}`} onClick={() => setSelectedSession(s)} style={{
               width: '100%',
               border: '1px solid var(--border)',
               background: selectedSession === s ? 'rgba(14,165,233,0.13)' : 'rgba(15,23,42,0.62)',
@@ -467,11 +478,11 @@ function CloudBreachSimulator({ scenario, setSelected, onEvidence }) {
               fontFamily: 'inherit',
             }}>
               <div>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>{s.app}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.location} / {s.time}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>{displayText(s.app, 'Cloud session')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{displayText(s.location, 'Unknown location')} / {displayText(s.time, 'Recent')}</div>
               </div>
-              <div style={{ fontSize: 11, color: 'var(--accent-cyan)', fontFamily: "'JetBrains Mono', monospace" }}>{s.ip}</div>
-              <div style={{ fontSize: 10, color: s.risk === 'Critical' ? '#ef4444' : s.risk === 'High' ? '#f59e0b' : '#22c55e', fontWeight: 800 }}>{s.risk}</div>
+              <div style={{ fontSize: 11, color: 'var(--accent-cyan)', fontFamily: "'JetBrains Mono', monospace" }}>{displayText(s.ip, 'Unknown IP')}</div>
+              <div style={{ fontSize: 10, color: s.risk === 'Critical' ? '#ef4444' : s.risk === 'High' ? '#f59e0b' : '#22c55e', fontWeight: 800 }}>{displayText(s.risk, 'High')}</div>
             </button>
           ))}
         </div>
@@ -482,7 +493,7 @@ function CloudBreachSimulator({ scenario, setSelected, onEvidence }) {
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Session management</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 12 }}>
-            {selectedSession ? `Selected ${selectedSession.app} session from ${selectedSession.location}.` : 'Select a session to inspect location, IP, and application scope.'}
+            {selectedSession ? `Selected ${displayText(selectedSession.app, 'cloud')} session from ${displayText(selectedSession.location, 'an unknown location')}.` : 'Select a session to inspect location, IP, and application scope.'}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <SmallButton onClick={() => { setSelectedSession(sessions.find(s => s.risk === 'Critical') || sessions[0]); onEvidence?.('session'); }} tone="info">Inspect Risky IP</SmallButton>
@@ -503,14 +514,14 @@ function InsiderThreatSimulator({ scenario, setSelected, onEvidence }) {
     { name: 'Nora Patel', dept: 'Finance', risk: 82, activity: 'Copied 2.4 GB to removable media' },
     { name: 'Evan Reed', dept: 'Engineering', risk: 64, activity: 'Accessed salary folder after hours' },
     { name: 'Lina Torres', dept: 'Sales', risk: 18, activity: 'Normal CRM export' },
-  ]);
+  ]).map((employee, index) => typeof employee === 'object' && employee !== null ? employee : { name: `Employee ${index + 1}`, dept: 'Unknown team', risk: 50, activity: displayText(employee) });
 
   return (
     <PanelShell label="INSIDER THREAT MONITORING">
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div style={{ ...cardStyle, padding: 16 }}>
           {employees.map((e) => (
-            <button key={e.name} onClick={() => { setWatched(e); onEvidence?.('baseline'); }} style={{
+            <button key={displayText(e.name)} onClick={() => { setWatched(e); onEvidence?.('baseline'); }} style={{
               width: '100%',
               padding: 12,
               borderRadius: 10,
@@ -522,8 +533,8 @@ function InsiderThreatSimulator({ scenario, setSelected, onEvidence }) {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 800 }}>{e.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.dept}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 800 }}>{displayText(e.name, 'Employee')}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{displayText(e.dept, 'Unknown team')}</div>
                 </div>
                 <div style={{ color: e.risk > 75 ? '#ef4444' : e.risk > 50 ? '#f59e0b' : '#22c55e', fontWeight: 900, fontFamily: "'JetBrains Mono', monospace" }}>{e.risk}</div>
               </div>
@@ -538,8 +549,8 @@ function InsiderThreatSimulator({ scenario, setSelected, onEvidence }) {
           {watched ? (
             <>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                <div>Employee: <strong style={{ color: 'var(--text-primary)' }}>{watched.name}</strong></div>
-                <div>Activity: <span style={{ color: watched.risk > 75 ? '#fca5a5' : '#fcd34d' }}>{watched.activity}</span></div>
+                <div>Employee: <strong style={{ color: 'var(--text-primary)' }}>{displayText(watched.name, 'Employee')}</strong></div>
+                <div>Activity: <span style={{ color: watched.risk > 75 ? '#fca5a5' : '#fcd34d' }}>{displayText(watched.activity, 'Unusual access pattern')}</span></div>
                 <div>Severity: {watched.risk > 75 ? 'High' : watched.risk > 50 ? 'Medium' : 'Low'}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -565,7 +576,7 @@ function WifiSpoofingSimulator({ scenario, setSelected, onEvidence }) {
     { ssid: 'Airport_Free_WiFi', strength: 92, secure: false, risk: 'High' },
     { ssid: 'Airport_Free_WiFi_5G', strength: 76, secure: true, risk: 'Medium' },
     { ssid: 'DXB-Official-WiFi', strength: 61, secure: true, risk: 'Low' },
-  ]);
+  ]).map((network, index) => typeof network === 'object' && network !== null ? network : { ssid: displayText(network, `Network ${index + 1}`), strength: 50, secure: false, risk: 'High' });
 
   return (
     <PanelShell label="ROGUE WIFI SELECTION">
@@ -573,7 +584,7 @@ function WifiSpoofingSimulator({ scenario, setSelected, onEvidence }) {
         <div style={{ ...cardStyle, padding: 16 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 12 }}>AVAILABLE NETWORKS</div>
           {networks.map(n => (
-            <button key={n.ssid} onClick={() => setNetwork(n)} style={{
+            <button key={displayText(n.ssid)} onClick={() => setNetwork(n)} style={{
               width: '100%',
               padding: 12,
               marginBottom: 8,
@@ -584,7 +595,7 @@ function WifiSpoofingSimulator({ scenario, setSelected, onEvidence }) {
               fontFamily: 'inherit',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>{n.ssid}</span>
+                <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>{displayText(n.ssid, 'Unknown network')}</span>
                 <span style={{ fontSize: 11, color: n.secure ? '#86efac' : '#fca5a5' }}>{n.secure ? 'WPA2' : 'Open'}</span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Signal {n.strength}% / risk {n.risk}</div>
@@ -632,7 +643,7 @@ function DNSSpoofingSimulator({ scenario, setSelected, onEvidence }) {
       <div style={{ ...cardStyle, overflow: 'hidden' }}>
         <div style={{ background: '#e5e7eb', padding: 10 }}>
           <div style={{ padding: '7px 10px', background: '#fff', borderRadius: 7, color: '#991b1b', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
-            Not secure / {data.requested_domain || 'https://intranet.company.com'}
+            Not secure / {displayText(data.requested_domain, 'https://intranet.company.com')}
           </div>
         </div>
         <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -651,7 +662,7 @@ function DNSSpoofingSimulator({ scenario, setSelected, onEvidence }) {
               <SmallButton onClick={() => { setLookup(true); onEvidence?.('technical'); }} tone="info">Run DNS Lookup</SmallButton>
               <SmallButton onClick={() => { setWarning(true); onEvidence?.('report'); }} tone="good">Stop and Report</SmallButton>
             </div>
-            {cert && <div style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.7 }}>Certificate CN: {data.cert_subject || 'intranet-company-login.net'} / issuer mismatch detected.</div>}
+            {cert && <div style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.7 }}>Certificate CN: {displayText(data.cert_subject, 'intranet-company-login.net')} / issuer mismatch detected.</div>}
             {lookup && <div style={{ fontSize: 12, color: '#fcd34d', lineHeight: 1.7 }}>Corporate resolver and public resolver disagree. Local DNS cache may be poisoned.</div>}
             {warning && <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: 'rgba(34,197,94,0.12)', color: '#bbf7d0', fontSize: 12 }}>Browser warning preserved and network team notified.</div>}
           </div>
@@ -665,12 +676,12 @@ function DeepfakeScamSimulator({ scenario, setSelected, onEvidence }) {
   const data = scenario.extra_data || {};
   const [analysis, setAnalysis] = useState(false);
   const [identityCheck, setIdentityCheck] = useState(false);
-  const markers = listValue(data.markers, ['Urgent payment pressure', 'No callback path', 'Synthetic cadence', 'Requests secrecy']);
+  const markers = listValue(data.markers, ['Urgent payment pressure', 'No callback path', 'Synthetic cadence', 'Requests secrecy']).map(item => displayText(item));
   const callerIdentity = getScenarioCallerIdentity(scenario, data, 'deepfake');
   const transcript = buildAIImpersonationCall(scenario, data, callerIdentity);
   const voiceSettings = aiVoiceSettings(scenario, data, callerIdentity);
-  const displayCaller = humanizeCallerLabel(data.impersonated || scenario.sender_name || scenario.subject, callerIdentity);
-  const channel = sanitizeCallerText(data.channel || 'Incoming phone call') || 'Incoming phone call';
+  const displayCaller = humanizeCallerLabel(displayText(data.impersonated || scenario.sender_name || scenario.subject), callerIdentity);
+  const channel = sanitizeCallerText(displayText(data.channel, 'Incoming phone call')) || 'Incoming phone call';
 
   return (
     <PanelShell label="MEDIA FORENSICS">
@@ -730,15 +741,19 @@ function AttackChainSimulator({ scenario, setSelected, onEvidence }) {
     { title: 'Internal Chat', event: 'Attacker uses your account to request a payroll file.', choices: [{ label: 'Warn team and revoke sessions', risk: -20 }, { label: 'Ignore chat', risk: 20 }] },
     { title: 'Ransomware', event: 'Endpoint begins downloading a payload.', choices: [{ label: 'Isolate endpoint', risk: -25 }, { label: 'Wait for IT', risk: 20 }] },
   ];
-  const stages = listValue(data.stages, fallbackStages).map((stage, i) => {
+  const stages = listValue(data.stages, fallbackStages).map((rawStage, i) => {
     const fallback = fallbackStages[i] || fallbackStages[0];
+    const stage = typeof rawStage === 'object' && rawStage !== null ? rawStage : { title: displayText(rawStage) };
     return {
-      title: stage.title || fallback.title,
-      event: stage.event || stage.body || fallback.event,
-      choices: listValue(stage.choices, fallback.choices).map((choice, j) => ({
-        label: choice.label || fallback.choices[j % fallback.choices.length].label,
-        risk: Number.isFinite(Number(choice.risk)) ? Number(choice.risk) : fallback.choices[j % fallback.choices.length].risk,
-      })),
+      title: displayText(stage.title, fallback.title),
+      event: displayText(stage.event || stage.body, fallback.event),
+      choices: listValue(stage.choices, fallback.choices).map((rawChoice, j) => {
+        const choice = typeof rawChoice === 'object' && rawChoice !== null ? rawChoice : { label: displayText(rawChoice) };
+        return {
+          label: displayText(choice.label, fallback.choices[j % fallback.choices.length].label),
+          risk: Number.isFinite(Number(choice.risk)) ? Number(choice.risk) : fallback.choices[j % fallback.choices.length].risk,
+        };
+      }),
     };
   });
   const [index, setIndex] = useState(0);
@@ -820,9 +835,9 @@ function SmishingSimulator({ scenario, setSelected, onEvidence }) {
   const [inspect, setInspect] = useState(false);
   const [opened, setOpened] = useState(false);
   const [blocked, setBlocked] = useState(false);
-  const sender = data.sender_number || data.phone || '+1 844 219 7781';
-  const link = data.short_url || data.url || 'https://parcel-help.example/track';
-  const message = data.message || scenario.body || 'Your delivery is paused. Pay the small customs fee now to release it today.';
+  const sender = displayText(data.sender_number || data.phone, '+1 844 219 7781');
+  const link = displayText(data.short_url || data.url, 'https://parcel-help.example/track');
+  const message = displayText(data.message || scenario.body, 'Your delivery is paused. Pay the small customs fee now to release it today.');
 
   return (
     <PanelShell label="SMS PHISHING PHONE">
@@ -866,8 +881,8 @@ function BECSimulator({ scenario, setSelected, onEvidence }) {
   const [invoice, setInvoice] = useState(false);
   const [approval, setApproval] = useState(false);
   const [bank, setBank] = useState(false);
-  const amount = data.amount || '$48,000';
-  const vendor = data.vendor || scenario.sender_name || 'Northstar Supplies';
+  const amount = displayText(data.amount, '$48,000');
+  const vendor = displayText(data.vendor || scenario.sender_name, 'Northstar Supplies');
 
   return (
     <PanelShell label="BUSINESS EMAIL COMPROMISE DESK">
@@ -903,8 +918,8 @@ function SupplyChainSimulator({ scenario, setSelected, onEvidence }) {
   const [diff, setDiff] = useState(false);
   const [signature, setSignature] = useState(false);
   const [sandbox, setSandbox] = useState(false);
-  const packageName = data.package || data.vendor_update || 'vendor-auth-sdk';
-  const version = data.version || '4.8.1';
+  const packageName = displayText(data.package || data.vendor_update, 'vendor-auth-sdk');
+  const version = displayText(data.version, '4.8.1');
 
   return (
     <PanelShell label="SUPPLY CHAIN UPDATE REVIEW">

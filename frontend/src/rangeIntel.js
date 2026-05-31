@@ -208,9 +208,16 @@ function stableIndex(value, length) {
 }
 
 function compact(value, fallback = 'Not provided') {
-  if (Array.isArray(value)) return value.length ? value.join(', ') : fallback;
+  if (Array.isArray(value)) {
+    const values = value.map(item => compact(item, '')).filter(Boolean);
+    return values.length ? values.join(', ') : fallback;
+  }
   if (value === undefined || value === null || value === '') return fallback;
-  if (typeof value === 'object') return Object.values(value).filter(Boolean).slice(0, 3).join(', ') || fallback;
+  if (typeof value === 'object') {
+    const preferred = value.name ?? value.label ?? value.value ?? value.text ?? value.title ?? value.status;
+    if (preferred !== undefined) return compact(preferred, fallback);
+    return Object.values(value).map(item => compact(item, '')).filter(Boolean).slice(0, 3).join(', ') || fallback;
+  }
   return String(value);
 }
 

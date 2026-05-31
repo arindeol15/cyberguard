@@ -8,8 +8,14 @@ async function request(method, path, body = null) {
   const opts = { method, headers: { 'Content-Type': 'application/json', ...authHeaders() } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${API}${path}`, opts);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Request failed');
+  const raw = await res.text();
+  let data = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = { detail: raw || `Request failed with status ${res.status}` };
+  }
+  if (!res.ok) throw new Error(data.detail || `Request failed with status ${res.status}`);
   return data;
 }
 

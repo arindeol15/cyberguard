@@ -344,6 +344,163 @@ async def request_claude_json(client: httpx.AsyncClient, model: str, prompt: str
             ) from first_error
 
 
+def _text_value(value, fallback="", preferred_keys=()):
+    """Collapse Claude's occasionally rich nested values into UI-safe text."""
+    if value is None:
+        return fallback
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, (str, int, float)):
+        return str(value).replace("\x00", "")
+    if isinstance(value, list):
+        values = [_text_value(item, "") for item in value]
+        return ", ".join(item for item in values if item) or fallback
+    if isinstance(value, dict):
+        keys = (*preferred_keys, "name", "label", "value", "text", "title", "status", "summary")
+        for key in keys:
+            if key in value and value[key] not in (None, ""):
+                return _text_value(value[key], fallback)
+        values = [_text_value(item, "") for item in value.values()]
+        return ", ".join(item for item in values if item) or fallback
+    return str(value)
+
+
+def _text_list(value, fallback=None):
+    if not isinstance(value, list):
+        return list(fallback or [])
+    values = [_text_value(item, "") for item in value]
+    values = [item for item in values if item]
+    return values or list(fallback or [])
+
+
+def _dict_list(value, fallback=None):
+    if not isinstance(value, list):
+        return list(fallback or [])
+    return [item for item in value if isinstance(item, dict)] or list(fallback or [])
+
+
+def _normalize_extra_data(category: str, extra_data: dict) -> dict:
+    """Keep rich AI data, while making fields consumed by React predictable."""
+    extra = dict(extra_data)
+    scalar_fields = {
+        "website": ["fake_url", "real_url", "ssl_status", "domain_age", "page_title"],
+        "qr": ["location", "claimed_purpose", "actual_destination", "qr_placement", "qr_url"],
+        "vishing": ["caller_id", "claimed_organization", "caller_name", "call_duration"],
+        "usb": ["found_location", "usb_label", "usb_appearance", "hidden_payload"],
+        "chat": ["channel", "sender_domain", "attachment"],
+        "attachment": ["filename", "size", "claimed_type", "real_type", "macros", "signature",
+                       "extension_chain", "hidden_payload", "author"],
+        "browser_exploit": ["url", "page_title", "popup_text", "download_name"],
+        "mfa": ["app", "location", "ip", "device", "prompt_count"],
+        "cloud": ["shares", "data_risk"],
+        "insider": ["policy_trigger"],
+        "wifi": ["captive_portal", "vpn", "location"],
+        "dns": ["requested_domain", "expected_ip", "resolved_ip", "cert_subject", "resolver_notes"],
+        "deepfake": ["impersonated", "channel", "transcript", "audio_url", "audioSrc"],
+        "attack_chain": ["initial_access", "final_impact"],
+        "smishing": ["sender_number", "phone", "short_url", "url", "message", "landing_page"],
+        "bec": ["vendor", "amount", "bank_change", "approval_chain", "invoice_metadata"],
+        "supply_chain": ["package", "vendor_update", "version", "publisher", "signature_status"],
+    }
+    preferred = {
+        "vendor": ("name",),
+        "amount": ("display", "formatted", "value"),
+        "bank_change": ("summary", "change_requested_via", "new_bank"),
+        "approval_chain": ("summary", "claimed_approver", "status"),
+        "invoice_metadata": ("summary", "invoice_number", "scenario_id"),
+    }
+    for field in scalar_fields.get(category, []):
+        if field in extra:
+            extra[field] = _text_value(extra[field], "", preferred.get(field, ()))
+
+    text_list_fields = {
+        "website": ["visual_differences"],
+        "qr": ["redirect_chain"],
+        "vishing": ["tactics_used", "info_requested", "call_script"],
+        "usb": ["files_if_opened"],
+        "attachment": ["detections"],
+        "browser_exploit": ["requested_permissions"],
+        "insider": ["risky_files"],
+        "deepfake": ["markers"],
+        "smishing": ["requested_data"],
+        "supply_chain": ["diff_summary", "sandbox_findings"],
+    }
+    for field in text_list_fields.get(category, []):
+        if field in extra:
+            extra[field] = _text_list(extra[field])
+
+    if category == "chat":
+        messages = []
+        for message in _dict_list(extra.get("messages")):
+            messages.append({
+                "from": _text_value(message.get("from"), "External user"),
+                "role": _text_value(message.get("role"), "Guest"),
+                "text": _text_value(message.get("text"), "Shared a protected document."),
+            })
+        if messages:
+            extra["messages"] = messages
+    elif category == "cloud":
+        sessions = []
+        for session in _dict_list(extra.get("sessions")):
+            sessions.append({
+                "app": _text_value(session.get("app"), "Cloud session"),
+                "ip": _text_value(session.get("ip"), "Unknown IP"),
+                "location": _text_value(session.get("location"), "Unknown location"),
+                "risk": _text_value(session.get("risk") or session.get("status"), "High"),
+                "time": _text_value(session.get("time"), "Recent"),
+            })
+        if sessions:
+            extra["sessions"] = sessions
+    elif category == "insider":
+        employees = []
+        for employee in _dict_list(extra.get("employees")):
+            try:
+                risk = max(0, min(100, int(float(employee.get("risk", 50)))))
+            except (TypeError, ValueError):
+                risk = 50
+            employees.append({
+                "name": _text_value(employee.get("name"), "Employee"),
+                "dept": _text_value(employee.get("dept") or employee.get("department"), "Unknown team"),
+                "risk": risk,
+                "activity": _text_value(employee.get("activity"), "Unusual access pattern"),
+            })
+        if employees:
+            extra["employees"] = employees
+    elif category == "wifi":
+        networks = []
+        for network in _dict_list(extra.get("networks")):
+            try:
+                strength = max(0, min(100, int(float(network.get("strength", 50)))))
+            except (TypeError, ValueError):
+                strength = 50
+            networks.append({
+                "ssid": _text_value(network.get("ssid"), "Unknown network"),
+                "strength": strength,
+                "secure": bool(network.get("secure", False)),
+                "risk": _text_value(network.get("risk"), "High"),
+            })
+        if networks:
+            extra["networks"] = networks
+    elif category == "attack_chain":
+        stages = []
+        for stage in _dict_list(extra.get("stages")):
+            choices = []
+            for choice in _dict_list(stage.get("choices")):
+                try:
+                    risk = int(float(choice.get("risk", 0)))
+                except (TypeError, ValueError):
+                    risk = 0
+                choices.append({"label": _text_value(choice.get("label"), "Investigate"), "risk": risk})
+            stages.append({
+                "title": _text_value(stage.get("title"), "Attack stage"),
+                "event": _text_value(stage.get("event") or stage.get("body"), "Review the evidence."),
+                "choices": choices,
+            })
+        if stages:
+            extra["stages"] = stages
+    return extra
+
+
 def normalize_ai_result(result: dict, category: str, difficulty: str, correct_pos: str) -> dict:
     options = result.get("options")
     if not isinstance(options, list) or len(options) < 2:
@@ -362,11 +519,17 @@ def normalize_ai_result(result: dict, category: str, difficulty: str, correct_po
     for i, opt in enumerate(options[:4]):
         if isinstance(opt, str):
             normalized_options.append({"id": f"opt{i + 1}", "label": opt, "desc": ""})
+        elif isinstance(opt, dict):
+            normalized_options.append({
+                "id": _text_value(opt.get("id"), f"opt{i + 1}"),
+                "label": _text_value(opt.get("label"), f"Option {i + 1}"),
+                "desc": _text_value(opt.get("desc"), ""),
+            })
         else:
             normalized_options.append({
-                "id": opt.get("id") or f"opt{i + 1}",
-                "label": opt.get("label") or f"Option {i + 1}",
-                "desc": opt.get("desc") or "",
+                "id": f"opt{i + 1}",
+                "label": _text_value(opt, f"Option {i + 1}"),
+                "desc": "",
             })
 
     while len(normalized_options) < 4:
@@ -374,14 +537,13 @@ def normalize_ai_result(result: dict, category: str, difficulty: str, correct_po
         normalized_options.append({"id": f"opt{i}", "label": "Escalate to security", "desc": "Defensive action"})
 
     option_ids = {opt["id"] for opt in normalized_options}
-    correct_id = result.get("correct_id") if result.get("correct_id") in option_ids else correct_pos
+    requested_correct_id = _text_value(result.get("correct_id"), "")
+    correct_id = requested_correct_id if requested_correct_id in option_ids else correct_pos
     if correct_id not in option_ids:
         correct_id = normalized_options[0]["id"]
 
-    flags = result.get("flags", [])
-    if isinstance(flags, str):
-        flags = [flags]
-    if not isinstance(flags, list) or not flags:
+    flags = _text_list(result.get("flags", []))
+    if not flags:
         flags = [
             "Urgency or pressure to act quickly",
             "Identity cannot be verified from the message alone",
@@ -392,13 +554,14 @@ def normalize_ai_result(result: dict, category: str, difficulty: str, correct_po
     extra_data = result.get("extra_data")
     if not isinstance(extra_data, dict):
         extra_data = {}
+    extra_data = _normalize_extra_data(category, extra_data)
 
     return {
-        "type": result.get("type") or category,
-        "from": result.get("from") or result.get("sender_email"),
-        "sender": result.get("sender") or result.get("sender_name"),
-        "subject": result.get("subject") or f"{difficulty} {category.replace('_', ' ')} scenario",
-        "body": result.get("body") or "Investigate the situation and choose the safest response.",
+        "type": _text_value(result.get("type"), category),
+        "from": _text_value(result.get("from") or result.get("sender_email"), ""),
+        "sender": _text_value(result.get("sender") or result.get("sender_name"), ""),
+        "subject": _text_value(result.get("subject"), f"{difficulty} {category.replace('_', ' ')} scenario"),
+        "body": _text_value(result.get("body"), "Investigate the situation and choose the safest response."),
         "extra_data": extra_data,
         "options": normalized_options,
         "correct_id": correct_id,

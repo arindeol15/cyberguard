@@ -12,6 +12,23 @@ const cardStyle = {
   borderRadius: 12,
 };
 
+function displayText(value, fallback = 'Not provided') {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (Array.isArray(value)) return value.map(item => displayText(item, '')).filter(Boolean).join(', ') || fallback;
+  if (typeof value === 'object') {
+    const preferred = value.name ?? value.label ?? value.value ?? value.text ?? value.title ?? value.status;
+    if (preferred !== undefined) return displayText(preferred, fallback);
+    return Object.values(value).map(item => displayText(item, '')).filter(Boolean).slice(0, 3).join(', ') || fallback;
+  }
+  return String(value);
+}
+
+function textList(value, fallback = []) {
+  if (!Array.isArray(value)) return fallback;
+  const values = value.map(item => displayText(item, '')).filter(Boolean);
+  return values.length ? values : fallback;
+}
+
 function ActionButton({ children, onClick, tone = 'neutral' }) {
   const tones = {
     neutral: ['rgba(15,23,42,0.84)', 'var(--border)', 'var(--text-secondary)'],
@@ -39,7 +56,7 @@ function Signal({ label, value, color = 'var(--accent-cyan)' }) {
   return (
     <div style={{ ...cardStyle, padding: 10 }}>
       <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 12, color, fontWeight: 800 }}>{value}</div>
+      <div style={{ fontSize: 12, color, fontWeight: 800 }}>{displayText(value)}</div>
     </div>
   );
 }
@@ -66,8 +83,10 @@ function EmailInvestigation({ scenario, setSelected, onEvidence }) {
   const [headers, setHeaders] = useState(false);
   const [link, setLink] = useState(false);
   const [attachment, setAttachment] = useState(false);
-  const domain = (scenario.sender_email || 'unknown@external-mail.net').split('@')[1] || 'external-mail.net';
-  const suspiciousUrl = scenario.body.match(/https?:\/\/[^\s]+|[a-z0-9.-]+\.(com|net|org|io|co)\/?[^\s]*/i)?.[0] || `https://${domain}/secure`;
+  const senderEmail = displayText(scenario.sender_email, 'unknown@external-mail.net');
+  const body = displayText(scenario.body, '');
+  const domain = senderEmail.split('@')[1] || 'external-mail.net';
+  const suspiciousUrl = body.match(/https?:\/\/[^\s]+|[a-z0-9.-]+\.(com|net|org|io|co)\/?[^\s]*/i)?.[0] || `https://${domain}/secure`;
 
   return (
     <Shell label="EMAIL CLIENT INVESTIGATION">
@@ -109,8 +128,8 @@ function WebsiteInvestigation({ scenario, onEvidence }) {
   const [cert, setCert] = useState(false);
   const [popup, setPopup] = useState(true);
   const [urlFocus, setUrlFocus] = useState(false);
-  const fakeUrl = data.fake_url || data.requested_domain || 'https://secure-login.example.net';
-  const realUrl = data.real_url || 'https://official.example.com';
+  const fakeUrl = displayText(data.fake_url || data.requested_domain, 'https://secure-login.example.net');
+  const realUrl = displayText(data.real_url, 'https://official.example.com');
 
   return (
     <Shell label="BROWSER TRUST INSPECTOR">
@@ -160,8 +179,8 @@ function QRScannerInvestigation({ scenario, setSelected, onEvidence }) {
   const [scan, setScan] = useState(false);
   const [pageOpen, setPageOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const target = data.actual_destination || data.qr_url || data.claimed_purpose || 'https://unknown-qr.example/login';
-  const claim = data.claimed_purpose || 'secure registration';
+  const target = displayText(data.actual_destination || data.qr_url || data.claimed_purpose, 'https://unknown-qr.example/login');
+  const claim = displayText(data.claimed_purpose, 'secure registration');
   const host = target.replace(/^https?:\/\//, '').split('/')[0] || 'unknown-qr.example';
   const openFakePage = () => { setScan(true); setPageOpen(true); onEvidence?.('url'); };
 
@@ -239,8 +258,8 @@ function VishingCallFlow({ scenario, setSelected, onEvidence }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
         <div style={{ ...cardStyle, padding: 18, textAlign: 'center', background: answered ? 'linear-gradient(135deg, rgba(34,197,94,0.16), rgba(15,23,42,0.92))' : 'linear-gradient(135deg, rgba(239,68,68,0.14), rgba(15,23,42,0.92))' }}>
           <div style={{ width: 86, height: 86, borderRadius: '50%', margin: '0 auto 14px', background: 'linear-gradient(135deg, #0f172a, #334155)', border: '1px solid rgba(148,163,184,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900 }}>CALL</div>
-          <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900 }}>{data.caller_name || scenario.sender_name || scenario.subject}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{data.caller_id || 'Unknown caller ID'}</div>
+          <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900 }}>{displayText(data.caller_name || scenario.sender_name || scenario.subject)}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{displayText(data.caller_id, 'Unknown caller ID')}</div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
             <ActionButton onClick={() => { setAnswered(true); onEvidence?.('audio'); }} tone="info">Answer</ActionButton>
             <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Reject</ActionButton>
@@ -249,8 +268,8 @@ function VishingCallFlow({ scenario, setSelected, onEvidence }) {
         <div style={{ ...cardStyle, padding: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
             <Signal label="CALL STATE" value={answered ? (muted ? 'Muted' : 'Live') : 'Ringing'} color={answered ? '#22c55e' : '#f59e0b'} />
-            <Signal label="TACTICS" value={(data.tactics_used || ['urgency']).slice(0, 2).join(', ')} color="#f59e0b" />
-            <Signal label="REQUESTS" value={(data.info_requested || ['credentials']).slice(0, 2).join(', ')} color="#ef4444" />
+            <Signal label="TACTICS" value={textList(data.tactics_used, ['urgency']).slice(0, 2).join(', ')} color="#f59e0b" />
+            <Signal label="REQUESTS" value={textList(data.info_requested, ['credentials']).slice(0, 2).join(', ')} color="#ef4444" />
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <ActionButton onClick={() => setMuted(v => !v)} tone="neutral">{muted ? 'Unmute' : 'Mute'}</ActionButton>
@@ -269,7 +288,7 @@ function USBDesktopInvestigation({ scenario, setSelected, onEvidence }) {
   const data = scenario.extra_data || {};
   const [mounted, setMounted] = useState(false);
   const [scan, setScan] = useState(false);
-  const files = data.files_if_opened || ['Payroll_Q4.xlsx', 'Board_Deck.pdf', 'autorun.inf'];
+  const files = textList(data.files_if_opened, ['Payroll_Q4.xlsx', 'Board_Deck.pdf', 'autorun.inf']);
 
   return (
     <Shell label="ENDPOINT USB LAB">

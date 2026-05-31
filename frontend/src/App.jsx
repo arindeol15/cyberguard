@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { Component, useState, useEffect, useRef } from 'react';
 import * as api from './api';
 import { ADVANCED_CATEGORIES, AdvancedScenarioPanel, IncidentResponseMode, SOCDashboard } from './AdvancedModules';
 import SimulationAudioPlayer from './SimulationAudioPlayer';
@@ -24,6 +24,49 @@ const CATEGORIES = [
 ];
 
 const SEVERITY_COLORS = { Critical: '#ef4444', High: '#f59e0b', Medium: '#eab308', Low: '#22c55e' };
+
+function displayText(value, fallback = 'Not provided') {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (Array.isArray(value)) return value.map(item => displayText(item, '')).filter(Boolean).join(', ') || fallback;
+  if (typeof value === 'object') {
+    const preferred = value.name ?? value.label ?? value.value ?? value.text ?? value.title ?? value.status;
+    if (preferred !== undefined) return displayText(preferred, fallback);
+    return Object.values(value).map(item => displayText(item, '')).filter(Boolean).slice(0, 3).join(', ') || fallback;
+  }
+  return String(value);
+}
+
+class SimulationErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Simulation rendering failed', error, info);
+  }
+
+  componentDidUpdate(previousProps) {
+    if (this.state.failed && previousProps.resetKey !== this.props.resetKey) {
+      this.setState({ failed: false });
+    }
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 0' }}>
+        <div style={{ color: '#fecaca', fontSize: 16, fontWeight: 800 }}>This generated scenario could not be displayed safely.</div>
+        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8 }}>The simulator stayed online. Return to the attack channels and request a fresh scenario.</p>
+        <button onClick={this.props.onRecover} style={{ marginTop: 12, padding: '10px 24px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'inherit' }}>Return to attack channels</button>
+      </div>
+    );
+  }
+}
 
 export default function App() {
   const [page, setPage] = useState('login');
@@ -51,7 +94,11 @@ export default function App() {
       <NavBar user={user} page={page} setPage={setPage} onLogout={handleLogout} />
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
         {page === 'home' && <HomePage user={user} setPage={setPage} difficulty={difficulty} setDifficulty={setDifficulty} category={category} setCategory={setCategory} useAi={useAi} setUseAi={setUseAi} />}
-        {page === 'scenario' && <ScenarioPage setPage={setPage} refreshUser={refreshUser} difficulty={difficulty} useAi={useAi} category={category} />}
+        {page === 'scenario' && (
+          <SimulationErrorBoundary resetKey={`${category}-${difficulty}-${useAi}`} onRecover={() => setPage('home')}>
+            <ScenarioPage setPage={setPage} refreshUser={refreshUser} difficulty={difficulty} useAi={useAi} category={category} />
+          </SimulationErrorBoundary>
+        )}
         {page === 'threats' && <ThreatPage />}
         {page === 'soc' && <SOCDashboard user={user} />}
         {page === 'leaderboard' && <LeaderboardPage user={user} />}
@@ -660,7 +707,7 @@ function callScenarioIntro(category, scenario, identity) {
   const request = sanitizeCallerText(quoted?.[1] || source)
     .replace(/^caller:\s*/i, '')
     .slice(0, 260);
-  const org = data.claimed_organization || identity.org || 'a trusted office';
+  const org = displayText(data.claimed_organization || identity.org, 'a trusted office');
   return [
     `Your phone rings from ${identity.name}, who claims to be from ${org}.`,
     request ? `Caller request: ${request}` : 'The caller is pushing you to act quickly during the call.',
@@ -885,10 +932,10 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
                 onEvidence={captureEvidence}
               />
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
-                <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{scenarioView.extra_data.caller_id || 'Unknown caller ID'}</span></div>
-                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{scenarioView.extra_data.claimed_organization || callIdentity?.org || 'Unverified organization'}</strong></div>
-                <div>Tactics: <span style={{ color: '#f59e0b' }}>{Array.isArray(scenarioView.extra_data.tactics_used) ? scenarioView.extra_data.tactics_used.join(', ') : 'urgency, authority'}</span></div>
-                <div>Wants: <span style={{ color: '#ef4444' }}>{Array.isArray(scenarioView.extra_data.info_requested) ? scenarioView.extra_data.info_requested.join(', ') : 'credentials or payment action'}</span></div>
+                <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{displayText(scenarioView.extra_data.caller_id, 'Unknown caller ID')}</span></div>
+                <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{displayText(scenarioView.extra_data.claimed_organization || callIdentity?.org, 'Unverified organization')}</strong></div>
+                <div>Tactics: <span style={{ color: '#f59e0b' }}>{displayText(scenarioView.extra_data.tactics_used, 'urgency, authority')}</span></div>
+                <div>Wants: <span style={{ color: '#ef4444' }}>{displayText(scenarioView.extra_data.info_requested, 'credentials or payment action')}</span></div>
               </div>
             </div>
           </div>
@@ -898,10 +945,10 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
           <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>USB METADATA</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-              <div>Found at: <strong style={{ color: 'var(--text-primary)' }}>{scenarioView.extra_data.found_location}</strong></div>
-              <div>Appearance: {scenarioView.extra_data.usb_appearance}</div>
-              <div>Label: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>"{scenarioView.extra_data.usb_label}"</span></div>
-              {scenarioView.extra_data.files_if_opened && <div>Files visible: {scenarioView.extra_data.files_if_opened.join(', ')}</div>}
+              <div>Found at: <strong style={{ color: 'var(--text-primary)' }}>{displayText(scenarioView.extra_data.found_location)}</strong></div>
+              <div>Appearance: {displayText(scenarioView.extra_data.usb_appearance)}</div>
+              <div>Label: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>"{displayText(scenarioView.extra_data.usb_label)}"</span></div>
+              {scenarioView.extra_data.files_if_opened && <div>Files visible: {displayText(scenarioView.extra_data.files_if_opened)}</div>}
             </div>
           </div>
         )}
@@ -1611,12 +1658,12 @@ function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, call
       .map(l => normalizeCallerName(sanitizeCallerText(l.replace(/^\s*(caller|scammer|agent|voice|cfo|ceo)\s*:/i, '').trim())))
       .filter(Boolean)
       .slice(0, 7);
-    const organization = extraData.claimed_organization || identity.org || 'Security Desk';
+    const organization = displayText(extraData.claimed_organization || identity.org, 'Security Desk');
     const intro = `Hi, this is ${identity.name} from ${organization}.`;
     if (callerLines.length >= 3) return [intro, ...callerLines].join('\n');
 
     const wants = Array.isArray(extraData.info_requested) && extraData.info_requested.length
-      ? extraData.info_requested.join(', ')
+      ? displayText(extraData.info_requested, 'verification details')
       : 'verification details';
     const request = extractRequest(source);
     const pressureLine = difficultyKey === 'hard'

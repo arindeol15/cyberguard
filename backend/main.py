@@ -9,7 +9,7 @@ from database import init_db, get_db, User, Scenario, Response, ThreatFeed
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from schemas import (RegisterRequest, LoginRequest, TokenResponse, UserResponse,
     GenerateRequest, SubmitRequest, SubmitResponse, LeaderboardEntry)
-from ai_engine import generate_ai_scenario, get_ai_status
+from ai_engine import generate_ai_scenario, generate_local_ai_scenario, get_ai_status
 from seed import seed_database
 from scenarios_seed import ALL_SCENARIOS
 
@@ -385,10 +385,19 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
             "subject": scenario.subject, "body": scenario.body, "options": options,
             "extra_data": extra}
 
+    def persist_generated_scenario_or_fallback(ai_result):
+        try:
+            return persist_generated_scenario(ai_result)
+        except Exception as error:
+            db.rollback()
+            print(f"AI scenario persistence failed for {category}: {type(error).__name__}: {error}")
+            local_result = generate_local_ai_scenario(category, difficulty, used_types, used_subjects)
+            return persist_generated_scenario(local_result)
+
     if req.use_ai:
         ai_result = await generate_ai_scenario(category, difficulty, used_types, used_subjects)
         if ai_result:
-            return persist_generated_scenario(ai_result)
+            return persist_generated_scenario_or_fallback(ai_result)
 
     # Static fallback
     unseen = db.query(Scenario).filter(Scenario.category == category, Scenario.difficulty == difficulty,
@@ -398,7 +407,7 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
     if not unseen:
         ai_result = await generate_ai_scenario(category, difficulty, used_types, used_subjects)
         if ai_result:
-            return persist_generated_scenario(ai_result)
+            return persist_generated_scenario_or_fallback(ai_result)
         unseen = db.query(Scenario).filter(Scenario.is_ai_generated == False).all()
     if not unseen:
         raise HTTPException(404, "No scenarios available")
