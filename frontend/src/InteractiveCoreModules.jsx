@@ -74,7 +74,7 @@ export default function InteractiveCorePanel({ category, scenario, setSelected, 
   if (!scenario) return null;
   if (category === 'email') return <EmailInvestigation scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
   if (category === 'qr') return <QRScannerInvestigation scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
-  if (category === 'vishing') return <VishingCallFlow scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
+  if (category === 'vishing') return null;
   if (category === 'usb') return <USBDesktopInvestigation scenario={scenario} setSelected={setSelected} onEvidence={onEvidence} />;
   return null;
 }
@@ -191,8 +191,9 @@ function QRScannerInvestigation({ scenario, setSelected, onEvidence }) {
           <div style={{ height: 34, color: '#94a3b8', fontSize: 11, textAlign: 'center' }}>Camera</div>
           <div style={{ height: 260, borderRadius: 18, background: 'linear-gradient(135deg, #0f172a, #111827)', border: '1px solid rgba(34,211,238,0.2)', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', inset: 34, border: '2px solid rgba(34,211,238,0.75)', borderRadius: 16, boxShadow: '0 0 24px rgba(34,211,238,0.24)' }} />
+            <QRCodeVisual seed={`${scenario.subject}-${target}`} active={scan} />
             {scan && <div style={{ position: 'absolute', left: 38, right: 38, top: pageOpen ? 190 : 60, height: 2, background: '#22d3ee', boxShadow: '0 0 18px #22d3ee', transition: 'top 0.9s' }} />}
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: scan ? '#67e8f9' : '#64748b', fontSize: 12, fontWeight: 800 }}>{scan ? 'QR DETECTED' : 'POINT CAMERA AT CODE'}</div>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 18, textAlign: 'center', color: scan ? '#67e8f9' : '#64748b', fontSize: 12, fontWeight: 800 }}>{scan ? 'QR DETECTED' : 'POINT CAMERA AT CODE'}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
             <ActionButton onClick={() => { setScan(true); onEvidence?.('scan'); }} tone="info">Scan Code</ActionButton>
@@ -247,40 +248,71 @@ function QRScannerInvestigation({ scenario, setSelected, onEvidence }) {
   );
 }
 
-function VishingCallFlow({ scenario, setSelected, onEvidence }) {
-  const data = scenario.extra_data || {};
-  const [answered, setAnswered] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [note, setNote] = useState(false);
+function QRCodeVisual({ seed, active }) {
+  const cells = useMemo(() => {
+    const size = 25;
+    let hash = 0;
+    const text = String(seed || 'cyberguard-qr');
+    for (let i = 0; i < text.length; i += 1) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+
+    const finderCell = (r, c, startR, startC) => {
+      const rr = r - startR;
+      const cc = c - startC;
+      if (rr < 0 || cc < 0 || rr > 6 || cc > 6) return null;
+      if (rr === 0 || cc === 0 || rr === 6 || cc === 6) return true;
+      if (rr >= 2 && rr <= 4 && cc >= 2 && cc <= 4) return true;
+      return false;
+    };
+
+    return Array.from({ length: size * size }, (_, index) => {
+      const r = Math.floor(index / size);
+      const c = index % size;
+      const finder =
+        finderCell(r, c, 1, 1) ??
+        finderCell(r, c, 1, size - 8) ??
+        finderCell(r, c, size - 8, 1);
+      if (finder !== null) return finder;
+      if (r === 8 || c === 8) return (r + c) % 2 === 0;
+      if (r < 1 || c < 1 || r > size - 2 || c > size - 2) return false;
+      const value = Math.abs(hash + r * 37 + c * 53 + r * c * 11 + ((r ^ c) * 7));
+      return value % 9 < 4;
+    });
+  }, [seed]);
 
   return (
-    <Shell label="LIVE CALL DECISION FLOW">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
-        <div style={{ ...cardStyle, padding: 18, textAlign: 'center', background: answered ? 'linear-gradient(135deg, rgba(34,197,94,0.16), rgba(15,23,42,0.92))' : 'linear-gradient(135deg, rgba(239,68,68,0.14), rgba(15,23,42,0.92))' }}>
-          <div style={{ width: 86, height: 86, borderRadius: '50%', margin: '0 auto 14px', background: 'linear-gradient(135deg, #0f172a, #334155)', border: '1px solid rgba(148,163,184,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900 }}>CALL</div>
-          <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 900 }}>{displayText(data.caller_name || scenario.sender_name || scenario.subject)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{displayText(data.caller_id, 'Unknown caller ID')}</div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
-            <ActionButton onClick={() => { setAnswered(true); onEvidence?.('audio'); }} tone="info">Answer</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Reject</ActionButton>
-          </div>
-        </div>
-        <div style={{ ...cardStyle, padding: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
-            <Signal label="CALL STATE" value={answered ? (muted ? 'Muted' : 'Live') : 'Ringing'} color={answered ? '#22c55e' : '#f59e0b'} />
-            <Signal label="TACTICS" value={textList(data.tactics_used, ['urgency']).slice(0, 2).join(', ')} color="#f59e0b" />
-            <Signal label="REQUESTS" value={textList(data.info_requested, ['credentials']).slice(0, 2).join(', ')} color="#ef4444" />
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <ActionButton onClick={() => setMuted(v => !v)} tone="neutral">{muted ? 'Unmute' : 'Mute'}</ActionButton>
-            <ActionButton onClick={() => { setNote(true); onEvidence?.('technical'); }} tone="info">Record Request</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('identity'); }} tone="good">Verify Caller</ActionButton>
-            <ActionButton onClick={() => { onEvidence?.('report'); }} tone="good">Report Call</ActionButton>
-          </div>
-          {note && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)', color: '#fde68a', fontSize: 12, lineHeight: 1.6 }}>Evidence note saved: caller identity, requested data, urgency language, and callback mismatch.</div>}
-        </div>
+    <div style={{
+      position: 'absolute',
+      left: '50%',
+      top: '44%',
+      transform: `translate(-50%, -50%) scale(${active ? 1.04 : 1})`,
+      width: 148,
+      height: 148,
+      padding: 8,
+      borderRadius: 10,
+      background: '#f8fafc',
+      boxShadow: active ? '0 0 34px rgba(34,211,238,0.42)' : '0 12px 32px rgba(0,0,0,0.35)',
+      border: active ? '1px solid rgba(103,232,249,0.65)' : '1px solid rgba(226,232,240,0.85)',
+      transition: 'all 0.2s ease',
+    }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(25, 1fr)',
+        gridTemplateRows: 'repeat(25, 1fr)',
+        width: '100%',
+        height: '100%',
+        gap: 1,
+      }}>
+        {cells.map((filled, index) => (
+          <span
+            key={index}
+            style={{
+              background: filled ? '#020617' : '#f8fafc',
+              borderRadius: filled && index % 11 === 0 ? 1 : 0,
+            }}
+          />
+        ))}
       </div>
-    </Shell>
+    </div>
   );
 }
 

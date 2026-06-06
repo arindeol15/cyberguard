@@ -923,7 +923,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
         {scenarioView.extra_data && category === 'vishing' && (
           <div style={{ padding: 20, borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '1.5px' }}>CALL DETAILS</div>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <VishingPlayer
                 transcript={scenarioView.body}
                 difficulty={scenarioView.difficulty}
@@ -931,7 +931,7 @@ function ScenarioPage({ setPage, refreshUser, difficulty, useAi, category }) {
                 callerIdentity={callIdentity}
                 onEvidence={captureEvidence}
               />
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, flex: 1, minWidth: 240 }}>
                 <div>Caller ID: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--accent-cyan)' }}>{displayText(scenarioView.extra_data.caller_id, 'Unknown caller ID')}</span></div>
                 <div>Claims: <strong style={{ color: 'var(--text-primary)' }}>{displayText(scenarioView.extra_data.claimed_organization || callIdentity?.org, 'Unverified organization')}</strong></div>
                 <div>Tactics: <span style={{ color: '#f59e0b' }}>{displayText(scenarioView.extra_data.tactics_used, 'urgency, authority')}</span></div>
@@ -1634,6 +1634,8 @@ function QRCode({ url, onEvidence }) {
 // ── VISHING PLAYER ──
 function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, callerIdentity, onEvidence }) {
   const identity = callerIdentity || { name: 'Avery Brooks', role: 'Verification Agent', org: 'Security Desk', voiceHint: 'caller' };
+  const [callState, setCallState] = useState('Ringing');
+  const [note, setNote] = useState('');
   const difficultyKey = String(difficulty || '').toLowerCase();
   const namePattern = 'Sarah|Kevin|Maya|Marcus|Elena|Daniel|Priya|Thomas|Nadia|Owen|Avery|Riley|Samira|Jonah|Nina|Adrian|Jordan|Sofia|Laura|Victor';
   const normalizeCallerName = (line) => String(line || '').replace(new RegExp(`\\bmy name is (${namePattern})\\b`, 'i'), `my name is ${identity.name.split(' ')[0]}`);
@@ -1687,11 +1689,18 @@ function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, call
   const pitch = difficultyKey === 'hard' ? 0.78 : difficultyKey === 'easy' ? 1.02 : 0.9;
   const callScript = buildCallScript(transcript);
   const displayCaller = `${identity.name} / ${identity.role}`;
+  const callTactics = displayText(extraData.tactics_used, 'urgency, authority');
+  const callRequest = displayText(extraData.info_requested, 'credentials or payment action');
+  const investigationAction = (nextState, signal, message) => {
+    setCallState(nextState);
+    setNote(message);
+    onEvidence?.(signal);
+  };
 
   return (
     <div style={{
       background: 'linear-gradient(135deg, #1e1b4b, #0a0f1c)',
-      borderRadius: 14, padding: 16, minWidth: 260, flexShrink: 0,
+      borderRadius: 14, padding: 16, minWidth: 280, flex: '1 1 420px',
       border: '1px solid var(--border-strong)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -1711,6 +1720,45 @@ function VishingPlayer({ transcript, difficulty = 'Medium', extraData = {}, call
         pitch={pitch}
         onEvidence={() => onEvidence?.('audio')}
       />
+      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))', gap: 8 }}>
+        {[
+          ['CALL STATE', callState, callState === 'Reported' ? '#22c55e' : callState === 'Rejected' ? '#f59e0b' : '#67e8f9'],
+          ['TACTICS', callTactics, '#f59e0b'],
+          ['REQUEST', callRequest, '#ef4444'],
+        ].map(([label, value, color]) => (
+          <div key={label} style={{ padding: 10, borderRadius: 10, background: 'rgba(5,8,16,0.58)', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: 5 }}>{label}</div>
+            <div style={{ fontSize: 12, color, fontWeight: 900 }}>{value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        <button
+          onClick={() => investigationAction('Listening', 'audio', 'Call answered. Listen for urgency, requested data, and callback pressure before deciding.')}
+          style={{ padding: '8px 11px', borderRadius: 8, border: '1px solid rgba(34,211,238,0.32)', background: 'rgba(34,211,238,0.1)', color: '#67e8f9', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}
+        >Answer / Listen</button>
+        <button
+          onClick={() => investigationAction('Recorded', 'technical', 'Request recorded: compare caller identity, requested action, urgency language, and callback mismatch.')}
+          style={{ padding: '8px 11px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.12)', color: '#fcd34d', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}
+        >Record Request</button>
+        <button
+          onClick={() => investigationAction('Verifying', 'identity', 'Out-of-band verification queued. Use a known official number instead of caller-provided instructions.')}
+          style={{ padding: '8px 11px', borderRadius: 8, border: '1px solid rgba(99,102,241,0.36)', background: 'rgba(99,102,241,0.13)', color: '#c4b5fd', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}
+        >Verify Caller</button>
+        <button
+          onClick={() => investigationAction('Reported', 'report', 'Call reported with transcript, caller claim, requested action, and suspicious pressure markers.')}
+          style={{ padding: '8px 11px', borderRadius: 8, border: '1px solid rgba(34,197,94,0.36)', background: 'rgba(34,197,94,0.12)', color: '#86efac', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}
+        >Report Call</button>
+        <button
+          onClick={() => investigationAction('Rejected', 'process', 'Call rejected. Continue by verifying through the official business process.')}
+          style={{ padding: '8px 11px', borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(15,23,42,0.84)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}
+        >Reject</button>
+      </div>
+      {note && (
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)', color: '#fde68a', fontSize: 12, lineHeight: 1.6 }}>
+          {note}
+        </div>
+      )}
     </div>
   );
 }
