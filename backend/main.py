@@ -295,32 +295,13 @@ def seed_expanded_scenarios():
 
 
 def shuffle_options(options, correct_action):
-    """Shuffle option positions and remap IDs so correct answer is at a random position every time."""
+    """Shuffle display order while keeping option IDs stable for grading."""
     if not options or len(options) < 2:
         return options, correct_action
 
-    # Find the correct option's content
-    correct_opt = None
-    for opt in options:
-        if opt["id"] == correct_action:
-            correct_opt = opt
-            break
-    if not correct_opt:
-        return options, correct_action
-
-    # Shuffle the options
     shuffled = list(options)
     random.shuffle(shuffled)
-
-    # Reassign IDs (opt1, opt2, opt3, opt4) based on new positions
-    new_correct = correct_action
-    for i, opt in enumerate(shuffled):
-        new_id = f"opt{i+1}"
-        if opt["label"] == correct_opt["label"] and opt["desc"] == correct_opt["desc"]:
-            new_correct = new_id
-        shuffled[i] = {"id": new_id, "label": opt["label"], "desc": opt["desc"]}
-
-    return shuffled, new_correct
+    return shuffled, correct_action
 
 @app.on_event("startup")
 def startup():
@@ -415,24 +396,10 @@ async def generate_scenario(req: GenerateRequest, db: Session = Depends(get_db),
     s = random.choice(unseen)
     opts = json.loads(s.options) if s.options else DEFAULT_OPTIONS
     correct = s.correct_action
-    # Shuffle options and remap correct answer
     opts, correct = shuffle_options(opts, correct)
     extra = json.loads(s.extra_data) if s.extra_data else None
 
-    # Create a new scenario record with shuffled options so correct_action matches
-    shuffled_scenario = Scenario(
-        category=s.category, type=s.type, difficulty=s.difficulty,
-        sender_email=s.sender_email, sender_name=s.sender_name,
-        subject=s.subject, body=s.body,
-        correct_action=correct,
-        red_flags=s.red_flags,
-        options=json.dumps(opts),
-        extra_data=s.extra_data,
-        is_ai_generated=False,
-    )
-    db.add(shuffled_scenario); db.commit(); db.refresh(shuffled_scenario)
-
-    return {"id": shuffled_scenario.id, "category": s.category, "type": s.type, "difficulty": s.difficulty,
+    return {"id": s.id, "category": s.category, "type": s.type, "difficulty": s.difficulty,
         "sender_email": s.sender_email, "sender_name": s.sender_name,
         "subject": s.subject, "body": s.body, "options": opts, "extra_data": extra}
 
